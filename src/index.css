@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+
+  --color-background: #fdfbf7;
+  --color-foreground: #2d2a26;
+  --color-card: #ffffff;
+  --color-primary: #5f7a67;
+  --color-primary-dark: #4c6353;
+  --color-secondary: #c08170;
+  --color-muted: #f3efeb;
+  --color-muted-foreground: #6b6862;
+  --color-accent: #e1d9cd;
+  --color-border: #e8e2d9;
+  --color-success: #3e7a4e;
+  --color-success-bg: #e3f2e6;
+  --color-warning: #8a6d1a;
+  --color-warning-bg: #faf0cf;
+  --color-danger: #b4443c;
+  --color-danger-bg: #fbe7e5;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    /* Tipografía grande por defecto: la app está pensada para adultos mayores */
+    font-size: 17px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+  }
+
+  button {
+    cursor: pointer;
+  }
+}
