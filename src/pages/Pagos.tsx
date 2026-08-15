@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Plus, Download, Pencil, Trash2, CheckCircle2, RotateCcw } from "lucide-react";
-import clsx from "clsx";
 import { useData } from "../hooks/useData";
 import {
   createPago,
@@ -13,13 +12,15 @@ import {
   updatePago,
 } from "../lib/api";
 import type { Pago } from "../lib/types";
-import { formatFecha, formatPrecio, nombreCompleto } from "../lib/format";
+import { formatFecha, formatMes, formatPrecio, nombreCompleto } from "../lib/format";
 import {
   Badge,
   Button,
+  ChipsFiltro,
   ConfirmDialog,
   EmptyState,
   ErrorState,
+  FiltroSelect,
   IconButton,
   LoadingState,
   PageHeader,
@@ -28,6 +29,7 @@ import {
 import { PagoModal } from "../components/PagoModal";
 
 type Filtro = "todos" | "pendiente" | "completado";
+type Orden = "recientes" | "antiguos" | "monto";
 
 const FILTROS: { valor: Filtro; etiqueta: string }[] = [
   { valor: "todos", etiqueta: "Todos" },
@@ -43,6 +45,9 @@ export default function Pagos() {
   const alumnos = useData(getAlumnos);
   const planes = useData(getPlanes);
   const [filtro, setFiltro] = useState<Filtro>("todos");
+  const [alumnoFiltro, setAlumnoFiltro] = useState("todos");
+  const [mesFiltro, setMesFiltro] = useState("todos");
+  const [orden, setOrden] = useState<Orden>("recientes");
   const [modal, setModal] = useState<{ abierto: boolean; pago: Pago | null }>({
     abierto: false,
     pago: null,
@@ -54,10 +59,28 @@ export default function Pagos() {
     return a ? nombreCompleto(a) : "—";
   };
 
+  // Meses de cuota presentes en los pagos, del más nuevo al más viejo.
+  const mesesDisponibles = useMemo(
+    () => [...new Set((pagos ?? []).map((p) => p.mes_imputacion))].sort().reverse(),
+    [pagos]
+  );
+
   const filtrados = useMemo(() => {
-    if (filtro === "todos") return pagos ?? [];
-    return (pagos ?? []).filter((p) => p.estado === filtro);
-  }, [pagos, filtro]);
+    let lista = pagos ?? [];
+    if (filtro !== "todos") lista = lista.filter((p) => p.estado === filtro);
+    if (alumnoFiltro !== "todos") lista = lista.filter((p) => p.alumno_id === alumnoFiltro);
+    if (mesFiltro !== "todos") lista = lista.filter((p) => p.mes_imputacion === mesFiltro);
+
+    const ordenada = [...lista];
+    if (orden === "monto") {
+      ordenada.sort((a, b) => Number(b.monto) - Number(a.monto));
+    } else if (orden === "antiguos") {
+      ordenada.sort((a, b) => a.fecha_pago.localeCompare(b.fecha_pago));
+    } else {
+      ordenada.sort((a, b) => b.fecha_pago.localeCompare(a.fecha_pago));
+    }
+    return ordenada;
+  }, [pagos, filtro, alumnoFiltro, mesFiltro, orden]);
 
   const guardar = async (input: Omit<Pago, "id">) => {
     if (modal.pago) {
@@ -131,22 +154,36 @@ export default function Pagos() {
         }
       />
 
-      {/* Filtros por chips */}
-      <div className="flex gap-2 mb-5">
-        {FILTROS.map((f) => (
-          <button
-            key={f.valor}
-            onClick={() => setFiltro(f.valor)}
-            className={clsx(
-              "rounded-full px-5 py-2.5 text-base font-semibold transition-colors",
-              filtro === f.valor
-                ? "bg-primary text-white shadow-sm"
-                : "bg-card border-2 border-border text-muted-foreground hover:bg-muted"
-            )}
+      {/* Filtros y ordenamiento */}
+      <div className="flex flex-col gap-3 mb-5">
+        <ChipsFiltro opciones={FILTROS} valor={filtro} onChange={setFiltro} />
+        <div className="flex gap-3 flex-wrap items-end">
+          <FiltroSelect label="Alumno" value={alumnoFiltro} onChange={setAlumnoFiltro}>
+            <option value="todos">Todos los alumnos</option>
+            {(alumnos.data ?? []).map((a) => (
+              <option key={a.id} value={a.id}>
+                {nombreCompleto(a)}
+              </option>
+            ))}
+          </FiltroSelect>
+          <FiltroSelect label="Mes de la cuota" value={mesFiltro} onChange={setMesFiltro}>
+            <option value="todos">Todos los meses</option>
+            {mesesDisponibles.map((m) => (
+              <option key={m} value={m}>
+                {formatMes(m)}
+              </option>
+            ))}
+          </FiltroSelect>
+          <FiltroSelect
+            label="Ordenar por"
+            value={orden}
+            onChange={(v) => setOrden(v as Orden)}
           >
-            {f.etiqueta}
-          </button>
-        ))}
+            <option value="recientes">Más recientes</option>
+            <option value="antiguos">Más antiguos</option>
+            <option value="monto">Mayor monto</option>
+          </FiltroSelect>
+        </div>
       </div>
 
       {filtrados.length === 0 ? (

@@ -18,6 +18,7 @@ import {
   ConfirmDialog,
   EmptyState,
   ErrorState,
+  FiltroSelect,
   IconButton,
   Input,
   LoadingState,
@@ -26,10 +27,14 @@ import {
 } from "../components/ui";
 import { AlumnoModal } from "../components/AlumnoModal";
 
+type Orden = "nombre" | "nuevos" | "asistencias";
+
 export default function Alumnos() {
   const { data: alumnos, loading, error, reload } = useData(getAlumnos);
   const planes = useData(getPlanes);
   const [busqueda, setBusqueda] = useState("");
+  const [planFiltro, setPlanFiltro] = useState("todos");
+  const [orden, setOrden] = useState<Orden>("nombre");
   const [modal, setModal] = useState<{ abierto: boolean; alumno: Alumno | null }>({
     abierto: false,
     alumno: null,
@@ -38,13 +43,28 @@ export default function Alumnos() {
 
   const filtrados = useMemo(() => {
     const term = busqueda.trim().toLowerCase();
-    if (!term) return alumnos ?? [];
-    return (alumnos ?? []).filter((a) =>
-      [a.nombre, a.apellido, a.telefono, a.email].some((campo) =>
-        campo.toLowerCase().includes(term)
-      )
-    );
-  }, [alumnos, busqueda]);
+    let lista = alumnos ?? [];
+    if (term) {
+      lista = lista.filter((a) =>
+        [a.nombre, a.apellido, a.telefono, a.email].some((campo) =>
+          campo.toLowerCase().includes(term)
+        )
+      );
+    }
+    if (planFiltro !== "todos") {
+      lista = lista.filter((a) => a.plan_ids.includes(planFiltro));
+    }
+
+    const ordenada = [...lista];
+    if (orden === "nuevos") {
+      ordenada.sort((a, b) => b.fecha_alta.localeCompare(a.fecha_alta));
+    } else if (orden === "asistencias") {
+      ordenada.sort((a, b) => b.asistencias_count - a.asistencias_count);
+    } else {
+      ordenada.sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)));
+    }
+    return ordenada;
+  }, [alumnos, busqueda, planFiltro, orden]);
 
   const nombrePlan = (id: string) => planes.data?.find((p) => p.id === id)?.nombre ?? "";
 
@@ -87,23 +107,38 @@ export default function Alumnos() {
         }
       />
 
-      {/* Buscador en tiempo real */}
-      <div className="relative mb-5 max-w-md">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-        <Input
-          className="pl-12"
-          placeholder="Buscar por nombre, apellido, teléfono o email…"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          aria-label="Buscar alumnos"
-        />
+      {/* Buscador en tiempo real + filtros */}
+      <div className="flex gap-3 flex-wrap items-end mb-5">
+        <div className="relative flex-1 min-w-64 max-w-md">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <Input
+            className="pl-12"
+            placeholder="Buscar por nombre, apellido, teléfono o email…"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            aria-label="Buscar alumnos"
+          />
+        </div>
+        <FiltroSelect label="Plan" value={planFiltro} onChange={setPlanFiltro}>
+          <option value="todos">Todos los planes</option>
+          {(planes.data ?? []).map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nombre}
+            </option>
+          ))}
+        </FiltroSelect>
+        <FiltroSelect label="Ordenar por" value={orden} onChange={(v) => setOrden(v as Orden)}>
+          <option value="nombre">Nombre (A-Z)</option>
+          <option value="nuevos">Más nuevos</option>
+          <option value="asistencias">Más asistencias</option>
+        </FiltroSelect>
       </div>
 
       {filtrados.length === 0 ? (
         <EmptyState
           message={
-            busqueda
-              ? "No se encontraron alumnos con esa búsqueda."
+            busqueda || planFiltro !== "todos"
+              ? "No se encontraron alumnos con esos filtros."
               : "Todavía no hay alumnos. Añadí el primer miembro con el botón de arriba."
           }
         />

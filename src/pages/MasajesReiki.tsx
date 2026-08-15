@@ -35,6 +35,7 @@ import {
 import {
   Badge,
   Button,
+  ChipsFiltro,
   ConfirmDialog,
   EmptyState,
   ErrorState,
@@ -46,11 +47,20 @@ import {
 import { ServicioModal } from "../components/ServicioModal";
 import { TurnoModal } from "../components/TurnoModal";
 
+type FiltroTurnos = "todos" | "cobrado" | "pendiente";
+
+const FILTROS_TURNOS: { valor: FiltroTurnos; etiqueta: string }[] = [
+  { valor: "todos", etiqueta: "Todos" },
+  { valor: "pendiente", etiqueta: "Pendientes" },
+  { valor: "cobrado", etiqueta: "Cobrados" },
+];
+
 export default function MasajesReiki() {
   const servicios = useData(getServiciosTerapias);
   const turnos = useData(getTurnosTerapias);
 
   const [mes, setMes] = useState(mesActualIso());
+  const [estadoFiltro, setEstadoFiltro] = useState<FiltroTurnos>("todos");
   const [modalServicio, setModalServicio] = useState<{
     abierto: boolean;
     servicio: ServicioTerapia | null;
@@ -116,6 +126,11 @@ export default function MasajesReiki() {
   const pendienteMes = turnosDelMes
     .filter((t) => t.estado === "pendiente")
     .reduce((sum, t) => sum + Number(t.monto), 0);
+
+  const turnosFiltrados =
+    estadoFiltro === "todos"
+      ? turnosDelMes
+      : turnosDelMes.filter((t) => t.estado === estadoFiltro);
 
   return (
     <div>
@@ -202,13 +217,16 @@ export default function MasajesReiki() {
 
       {/* Turnos del mes */}
       <h2 className="text-2xl font-bold mb-4">Turnos de {formatMes(mes)}</h2>
-      {turnosDelMes.length === 0 ? (
-        <EmptyState message="No hay turnos registrados en este mes." />
+      <div className="mb-4">
+        <ChipsFiltro opciones={FILTROS_TURNOS} valor={estadoFiltro} onChange={setEstadoFiltro} />
+      </div>
+      {turnosFiltrados.length === 0 ? (
+        <EmptyState message="No hay turnos para mostrar con este filtro." />
       ) : (
         <Table
           headers={["Cliente", "Contacto", "Servicio", "Fecha", "Hora", "Monto", "Estado", "Acciones"]}
         >
-          {turnosDelMes.map((t) => (
+          {turnosFiltrados.map((t) => (
             <tr key={t.id} className="hover:bg-muted/40">
               <td className="px-5 py-4 font-semibold">{t.cliente_nombre}</td>
               <td className="px-5 py-4">

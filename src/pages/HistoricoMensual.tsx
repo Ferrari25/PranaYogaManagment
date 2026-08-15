@@ -32,6 +32,7 @@ import {
   Button,
   EmptyState,
   ErrorState,
+  FiltroSelect,
   LoadingState,
   PageHeader,
   Table,
@@ -70,6 +71,7 @@ export default function HistoricoMensual() {
   );
   const [cobrando, setCobrando] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
+  const [orden, setOrden] = useState<"deuda" | "nombre">("deuda");
 
   if (loading || alumnos.loading || planes.loading) return <LoadingState />;
   const err = error || alumnos.error || planes.error;
@@ -119,7 +121,11 @@ export default function HistoricoMensual() {
         },
       ];
     })
-    .sort((d1, d2) => nombreCompleto(d1.alumno).localeCompare(nombreCompleto(d2.alumno)));
+    .sort((d1, d2) =>
+      orden === "deuda"
+        ? d2.monto + d2.deudaPrevia - (d1.monto + d1.deudaPrevia)
+        : nombreCompleto(d1.alumno).localeCompare(nombreCompleto(d2.alumno))
+    );
 
   /** Cobro directo: completa el pago pendiente o registra uno nuevo cobrado hoy. */
   const cobrar = async (d: Deudor) => {
@@ -213,10 +219,22 @@ export default function HistoricoMensual() {
       </div>
 
       {/* Lista exclusiva de deudores */}
-      <h2 className="text-2xl font-bold mb-1">Cuotas pendientes de {formatMes(mes)}</h2>
-      <p className="text-muted-foreground mb-4">
-        Solo aparecen los alumnos que todavía no pagaron este mes.
-      </p>
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+        <div>
+          <h2 className="text-2xl font-bold mb-1">Cuotas pendientes de {formatMes(mes)}</h2>
+          <p className="text-muted-foreground">
+            Solo aparecen los alumnos que todavía no pagaron este mes.
+          </p>
+        </div>
+        <FiltroSelect
+          label="Ordenar por"
+          value={orden}
+          onChange={(v) => setOrden(v as "deuda" | "nombre")}
+        >
+          <option value="deuda">Mayor deuda total</option>
+          <option value="nombre">Nombre (A-Z)</option>
+        </FiltroSelect>
+      </div>
 
       {errorAccion && <ErrorState message={errorAccion} />}
 

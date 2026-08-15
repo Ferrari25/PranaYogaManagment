@@ -113,6 +113,64 @@ export function Badge({ tone = "neutral", children }: { tone?: BadgeTone; childr
 }
 
 // ---------------------------------------------------------------------------
+// Chips de filtro rápido (Todos | Pendientes | ...)
+// ---------------------------------------------------------------------------
+export function ChipsFiltro<T extends string>({
+  opciones,
+  valor,
+  onChange,
+}: {
+  opciones: ReadonlyArray<{ valor: T; etiqueta: string }>;
+  valor: T;
+  onChange: (valor: T) => void;
+}) {
+  return (
+    <div className="flex gap-2 flex-wrap">
+      {opciones.map((o) => (
+        <button
+          key={o.valor}
+          onClick={() => onChange(o.valor)}
+          className={clsx(
+            "rounded-full px-5 py-2.5 text-base font-semibold transition-colors",
+            valor === o.valor
+              ? "bg-primary text-white shadow-sm"
+              : "bg-card border-2 border-border text-muted-foreground hover:bg-muted"
+          )}
+        >
+          {o.etiqueta}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Select compacto con etiqueta, para barras de filtros. */
+export function FiltroSelect({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (valor: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-sm font-semibold text-muted-foreground">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-xl border-2 border-border bg-card px-3 py-2.5 text-base text-foreground focus:outline-none focus:border-primary"
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Encabezado de página
 // ---------------------------------------------------------------------------
 export function PageHeader({

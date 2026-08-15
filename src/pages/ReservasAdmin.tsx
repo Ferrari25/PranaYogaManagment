@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Copy, Check, XCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { cancelarReserva, getClases, getReservas } from "../lib/api";
@@ -8,25 +8,53 @@ import { formatFecha, formatHora, whatsappUrl } from "../lib/format";
 import {
   Badge,
   Button,
+  ChipsFiltro,
   ConfirmDialog,
   EmptyState,
   ErrorState,
+  FiltroSelect,
   IconButton,
   LoadingState,
   PageHeader,
   Table,
 } from "../components/ui";
 
+type FiltroEstado = "confirmada" | "cancelada" | "todas";
+type Orden = "recientes" | "proximas";
+
+const FILTROS_ESTADO: { valor: FiltroEstado; etiqueta: string }[] = [
+  { valor: "confirmada", etiqueta: "Confirmadas" },
+  { valor: "cancelada", etiqueta: "Canceladas" },
+  { valor: "todas", etiqueta: "Todas" },
+];
+
 export default function ReservasAdmin() {
   const { data: reservas, loading, error, reload } = useData(getReservas);
   const clases = useData(getClases);
   const [copiado, setCopiado] = useState(false);
   const [aCancelar, setACancelar] = useState<Reserva | null>(null);
+  const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>("confirmada");
+  const [claseFiltro, setClaseFiltro] = useState("todas");
+  const [orden, setOrden] = useState<Orden>("recientes");
 
   // Al entrar a esta pantalla, el aviso de reservas nuevas del sidebar se limpia.
   useEffect(() => {
     if (!loading) marcarReservasVistas();
   }, [loading]);
+
+  const filtradas = useMemo(() => {
+    let lista = reservas ?? [];
+    if (estadoFiltro !== "todas") lista = lista.filter((r) => r.estado === estadoFiltro);
+    if (claseFiltro !== "todas") lista = lista.filter((r) => r.clase_id === claseFiltro);
+
+    const ordenada = [...lista];
+    if (orden === "proximas") {
+      ordenada.sort((a, b) => a.fecha_reserva.localeCompare(b.fecha_reserva));
+    } else {
+      ordenada.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    }
+    return ordenada;
+  }, [reservas, estadoFiltro, claseFiltro, orden]);
 
   const urlPublica = `${window.location.origin}/book`;
 
@@ -76,11 +104,30 @@ export default function ReservasAdmin() {
         <code className="font-mono bg-muted px-2 py-1 rounded text-foreground">{urlPublica}</code>
       </p>
 
-      {(reservas ?? []).length === 0 ? (
-        <EmptyState message="Todavía no hay reservas registradas." />
+      {/* Filtros y ordenamiento */}
+      <div className="flex flex-col gap-3 mb-5">
+        <ChipsFiltro opciones={FILTROS_ESTADO} valor={estadoFiltro} onChange={setEstadoFiltro} />
+        <div className="flex gap-3 flex-wrap items-end">
+          <FiltroSelect label="Clase" value={claseFiltro} onChange={setClaseFiltro}>
+            <option value="todas">Todas las clases</option>
+            {(clases.data ?? []).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre} · {c.dia_semana} {formatHora(c.hora_inicio)} hs
+              </option>
+            ))}
+          </FiltroSelect>
+          <FiltroSelect label="Ordenar por" value={orden} onChange={(v) => setOrden(v as Orden)}>
+            <option value="recientes">Últimas reservadas</option>
+            <option value="proximas">Fecha de clase más próxima</option>
+          </FiltroSelect>
+        </div>
+      </div>
+
+      {filtradas.length === 0 ? (
+        <EmptyState message="No hay reservas para mostrar con estos filtros." />
       ) : (
         <Table headers={["Cliente", "Contacto", "Clase", "Fecha", "Estado", "Acciones"]}>
-          {(reservas ?? []).map((r) => (
+          {filtradas.map((r) => (
             <tr key={r.id} className="hover:bg-muted/40">
               <td className="px-5 py-4 font-semibold">{r.alumno_nombre}</td>
               <td className="px-5 py-4">
