@@ -119,9 +119,10 @@ export default function Alumnos() {
                       href={whatsappUrl(a.telefono)}
                       target="_blank"
                       rel="noreferrer"
+                      title="Abrir chat de WhatsApp"
                       className="text-success font-semibold hover:underline"
                     >
-                      {a.telefono} (WhatsApp)
+                      {a.telefono}
                     </a>
                   )}
                   {a.email && (

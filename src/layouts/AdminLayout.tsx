@@ -4,7 +4,9 @@ import {
   CalendarDays,
   Users,
   CreditCard,
+  History,
   Sparkles,
+  HeartHandshake,
   BookmarkCheck,
 } from "lucide-react";
 import clsx from "clsx";
@@ -15,7 +17,9 @@ const navegacion = [
   { nombre: "Clases", href: "/clases", icono: CalendarDays },
   { nombre: "Alumnos", href: "/alumnos", icono: Users },
   { nombre: "Pagos", href: "/pagos", icono: CreditCard },
+  { nombre: "Histórico Mensual", href: "/historico", icono: History },
   { nombre: "Planes", href: "/planes", icono: Sparkles },
+  { nombre: "Masajes & Reiki", href: "/terapias", icono: HeartHandshake },
   { nombre: "Reservas", href: "/reservas", icono: BookmarkCheck },
 ];
 

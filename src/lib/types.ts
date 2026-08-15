@@ -27,12 +27,23 @@ export interface Alumno {
 
 export type EstadoPago = "pendiente" | "completado";
 
+/** Parte de un pago dividido: método y monto parcial. */
+export interface MetodoPago {
+  metodo: string;
+  monto: number;
+}
+
 export interface Pago {
   id: string;
   alumno_id: string;
   concepto: string;
   monto: number;
+  /** Resumen legible de los métodos usados, ej: "Efectivo + Transferencia". */
   modalidad_pago: string;
+  /** Detalle del pago dividido; suma siempre igual a `monto`. */
+  metodos_pago: MetodoPago[];
+  /** Mes de la cuota que se paga (YYYY-MM), independiente de la fecha de cobro. */
+  mes_imputacion: string;
   estado: EstadoPago;
   fecha_pago: string; // YYYY-MM-DD
   notas: string;
@@ -55,9 +66,12 @@ export interface Clase {
   nombre: string;
   instructor: string;
   dia_semana: DiaSemana;
-  hora_inicio: string; // HH:MM
+  hora_inicio: string; // HH:MM (formato 24 hs)
+  /** Siempre 1 hora después de hora_inicio; se calcula automáticamente. */
   hora_fin: string; // HH:MM
   cupo_maximo: number;
+  /** Ids de alumnos fijos inscriptos (tabla clase_alumnos), cargados por la API. */
+  alumno_ids: string[];
 }
 
 export type EstadoReserva = "confirmada" | "cancelada";
@@ -78,3 +92,31 @@ export const MODALIDADES_PAGO = [
   "Tarjeta de débito",
   "Tarjeta de crédito",
 ] as const;
+
+// ---------------------------------------------------------------------------
+// Masajes & Reiki: módulo independiente del yoga (no comparte alumnos,
+// planes ni métricas con las clases).
+// ---------------------------------------------------------------------------
+
+export interface ServicioTerapia {
+  id: string;
+  nombre: string;
+  precio: number;
+  duracion_minutos: number;
+  activo: boolean;
+}
+
+export type EstadoTurno = "cobrado" | "pendiente";
+
+export interface TurnoTerapia {
+  id: string;
+  servicio_id: string | null;
+  cliente_nombre: string;
+  cliente_telefono: string;
+  fecha: string; // YYYY-MM-DD
+  hora: string; // HH:MM
+  monto: number;
+  modalidad_pago: string;
+  estado: EstadoTurno;
+  notas: string;
+}

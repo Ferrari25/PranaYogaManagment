@@ -83,9 +83,10 @@ export default function ReservasAdmin() {
                     href={whatsappUrl(r.alumno_telefono)}
                     target="_blank"
                     rel="noreferrer"
+                    title="Abrir chat de WhatsApp"
                     className="text-success font-semibold hover:underline"
                   >
-                    {r.alumno_telefono} (WhatsApp)
+                    {r.alumno_telefono}
                   </a>
                 ) : (
                   "—"

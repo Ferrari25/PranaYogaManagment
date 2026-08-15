@@ -2,7 +2,17 @@
 // Cada función lanza Error con mensaje legible si Supabase responde con error.
 
 import { supabase } from "./supabase";
-import type { Alumno, Clase, Pago, Plan, Reserva, EstadoPago } from "./types";
+import type {
+  Alumno,
+  Clase,
+  Pago,
+  Plan,
+  Reserva,
+  EstadoPago,
+  ServicioTerapia,
+  TurnoTerapia,
+  EstadoTurno,
+} from "./types";
 
 function check<T>(data: T | null, error: { message: string } | null): T {
   if (error) throw new Error(error.message);
@@ -84,6 +94,7 @@ export async function createAlumno(input: AlumnoInput, planes: Plan[]): Promise<
       monto: total,
       estado: "pendiente",
       fecha_pago: input.fecha_alta,
+      mes_imputacion: input.fecha_alta.slice(0, 7),
     });
     check(null, pagoError);
   }
@@ -158,16 +169,45 @@ export async function deletePago(id: string): Promise<void> {
 // CLASES
 // ---------------------------------------------------------------------------
 export async function getClases(): Promise<Clase[]> {
-  const { data, error } = await supabase.from("clases").select("*").order("hora_inicio");
-  return check(data, error);
+  const [clasesRes, inscriptosRes] = await Promise.all([
+    supabase.from("clases").select("*").order("hora_inicio"),
+    supabase.from("clase_alumnos").select("clase_id, alumno_id"),
+  ]);
+  const clases = check(clasesRes.data, clasesRes.error);
+  const inscriptos = check(inscriptosRes.data, inscriptosRes.error);
+
+  return clases.map((c: Omit<Clase, "alumno_ids">) => ({
+    ...c,
+    alumno_ids: inscriptos.filter((i) => i.clase_id === c.id).map((i) => i.alumno_id),
+  }));
 }
 
-export async function createClase(clase: Omit<Clase, "id">): Promise<void> {
+export async function createClase(clase: Omit<Clase, "id" | "alumno_ids">): Promise<void> {
   const { error } = await supabase.from("clases").insert(clase);
   check(null, error);
 }
 
-export async function updateClase(id: string, clase: Partial<Clase>): Promise<void> {
+/** Inscribe un alumno como asistente fijo de una clase semanal. */
+export async function inscribirAlumnoEnClase(claseId: string, alumnoId: string): Promise<void> {
+  const { error } = await supabase
+    .from("clase_alumnos")
+    .insert({ clase_id: claseId, alumno_id: alumnoId });
+  check(null, error);
+}
+
+export async function removerAlumnoDeClase(claseId: string, alumnoId: string): Promise<void> {
+  const { error } = await supabase
+    .from("clase_alumnos")
+    .delete()
+    .eq("clase_id", claseId)
+    .eq("alumno_id", alumnoId);
+  check(null, error);
+}
+
+export async function updateClase(
+  id: string,
+  clase: Partial<Omit<Clase, "id" | "alumno_ids">>
+): Promise<void> {
   const { error } = await supabase.from("clases").update(clase).eq("id", id);
   check(null, error);
 }
@@ -211,5 +251,72 @@ export async function createReserva(
 
 export async function cancelarReserva(id: string): Promise<void> {
   const { error } = await supabase.from("reservas").update({ estado: "cancelada" }).eq("id", id);
+  check(null, error);
+}
+
+// ---------------------------------------------------------------------------
+// MASAJES & REIKI: servicios y turnos, módulo independiente del yoga
+// ---------------------------------------------------------------------------
+export async function getServiciosTerapias(): Promise<ServicioTerapia[]> {
+  const { data, error } = await supabase
+    .from("servicios_terapias")
+    .select("*")
+    .eq("activo", true)
+    .order("precio", { ascending: true });
+  return check(data, error);
+}
+
+export async function createServicioTerapia(
+  servicio: Omit<ServicioTerapia, "id" | "activo">
+): Promise<void> {
+  const { error } = await supabase.from("servicios_terapias").insert(servicio);
+  check(null, error);
+}
+
+export async function updateServicioTerapia(
+  id: string,
+  servicio: Partial<ServicioTerapia>
+): Promise<void> {
+  const { error } = await supabase.from("servicios_terapias").update(servicio).eq("id", id);
+  check(null, error);
+}
+
+export async function deleteServicioTerapia(id: string): Promise<void> {
+  // Borrado lógico: los turnos ya registrados conservan la referencia.
+  const { error } = await supabase
+    .from("servicios_terapias")
+    .update({ activo: false })
+    .eq("id", id);
+  check(null, error);
+}
+
+export async function getTurnosTerapias(): Promise<TurnoTerapia[]> {
+  const { data, error } = await supabase
+    .from("turnos_terapias")
+    .select("*")
+    .order("fecha", { ascending: false })
+    .order("hora", { ascending: true });
+  return check(data, error);
+}
+
+export async function createTurnoTerapia(turno: Omit<TurnoTerapia, "id">): Promise<void> {
+  const { error } = await supabase.from("turnos_terapias").insert(turno);
+  check(null, error);
+}
+
+export async function updateTurnoTerapia(
+  id: string,
+  turno: Partial<TurnoTerapia>
+): Promise<void> {
+  const { error } = await supabase.from("turnos_terapias").update(turno).eq("id", id);
+  check(null, error);
+}
+
+export async function setEstadoTurno(id: string, estado: EstadoTurno): Promise<void> {
+  await updateTurnoTerapia(id, { estado });
+}
+
+export async function deleteTurnoTerapia(id: string): Promise<void> {
+  const { error } = await supabase.from("turnos_terapias").delete().eq("id", id);
   check(null, error);
 }

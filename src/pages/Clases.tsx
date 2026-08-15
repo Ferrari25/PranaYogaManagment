@@ -1,10 +1,19 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, X } from "lucide-react";
+import clsx from "clsx";
 import { useData } from "../hooks/useData";
-import { createClase, deleteClase, getClases, updateClase } from "../lib/api";
-import type { Clase } from "../lib/types";
+import {
+  createClase,
+  deleteClase,
+  getAlumnos,
+  getClases,
+  inscribirAlumnoEnClase,
+  removerAlumnoDeClase,
+  updateClase,
+} from "../lib/api";
+import type { Alumno, Clase } from "../lib/types";
 import { DIAS_SEMANA } from "../lib/types";
-import { formatHora, hoyDiaSemana } from "../lib/format";
+import { formatHora, hoyDiaSemana, nombreCompleto } from "../lib/format";
 import {
   Badge,
   Button,
@@ -16,17 +25,117 @@ import {
   PageHeader,
 } from "../components/ui";
 import { ClaseModal } from "../components/ClaseModal";
-import clsx from "clsx";
+
+/** Lista de inscriptos de una clase con alta/baja rápida de alumnos. */
+function InscriptosDeClase({
+  clase,
+  alumnos,
+  onChange,
+}: {
+  clase: Clase;
+  alumnos: Alumno[];
+  onChange: () => void;
+}) {
+  const [trabajando, setTrabajando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const inscriptos = clase.alumno_ids
+    .map((id) => alumnos.find((a) => a.id === id))
+    .filter((a): a is Alumno => Boolean(a));
+  const disponibles = alumnos.filter((a) => !clase.alumno_ids.includes(a.id));
+  const completa = inscriptos.length >= clase.cupo_maximo;
+
+  const agregar = async (alumnoId: string) => {
+    if (!alumnoId) return;
+    setTrabajando(true);
+    setError(null);
+    try {
+      await inscribirAlumnoEnClase(clase.id, alumnoId);
+      onChange();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setTrabajando(false);
+    }
+  };
+
+  const remover = async (alumnoId: string) => {
+    setTrabajando(true);
+    setError(null);
+    try {
+      await removerAlumnoDeClase(clase.id, alumnoId);
+      onChange();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setTrabajando(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border">
+      <p className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground mb-2">
+        <Users className="w-4 h-4" />
+        Alumnos fijos:{" "}
+        <span className={completa ? "text-danger" : ""}>
+          {inscriptos.length}/{clase.cupo_maximo}
+        </span>
+      </p>
+
+      {inscriptos.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5 mb-2">
+          {inscriptos.map((a) => (
+            <li
+              key={a.id}
+              className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary-dark pl-3 pr-1 py-0.5 text-sm font-semibold"
+            >
+              {nombreCompleto(a)}
+              <button
+                onClick={() => remover(a.id)}
+                disabled={trabajando}
+                title={`Quitar a ${nombreCompleto(a)}`}
+                aria-label={`Quitar a ${nombreCompleto(a)}`}
+                className="rounded-full p-1 hover:bg-danger-bg hover:text-danger transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {disponibles.length > 0 && (
+        <select
+          value=""
+          disabled={trabajando}
+          onChange={(e) => agregar(e.target.value)}
+          aria-label={`Agregar alumno a ${clase.nombre}`}
+          className="w-full rounded-lg border-2 border-dashed border-border bg-card px-3 py-2 text-sm font-semibold text-muted-foreground focus:outline-none focus:border-primary cursor-pointer"
+        >
+          <option value="">+ Agregar alumno…</option>
+          {disponibles.map((a) => (
+            <option key={a.id} value={a.id}>
+              {nombreCompleto(a)}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {error && <p className="text-danger text-sm font-semibold mt-2">{error}</p>}
+    </div>
+  );
+}
 
 export default function Clases() {
   const { data: clases, loading, error, reload } = useData(getClases);
+  const alumnos = useData(getAlumnos);
   const [modal, setModal] = useState<{ abierto: boolean; clase: Clase | null }>({
     abierto: false,
     clase: null,
   });
   const [aEliminar, setAEliminar] = useState<Clase | null>(null);
 
-  const guardar = async (input: Omit<Clase, "id">) => {
+  const guardar = async (input: Omit<Clase, "id" | "alumno_ids">) => {
     if (modal.clase) {
       await updateClase(modal.clase.id, input);
     } else {
@@ -43,11 +152,12 @@ export default function Clases() {
     reload();
   };
 
-  if (loading) return <LoadingState />;
-  if (error) return <ErrorState message={error} />;
+  if (loading || alumnos.loading) return <LoadingState />;
+  const err = error || alumnos.error;
+  if (err) return <ErrorState message={err} />;
 
   const lista = clases ?? [];
-  // Grilla semanal: solo se muestran los días que tienen clases (más los hábiles).
+  // Grilla semanal: días hábiles siempre visibles + fin de semana si tiene clases.
   const diasConClases = DIAS_SEMANA.filter(
     (d, i) => i < 5 || lista.some((c) => c.dia_semana === d)
   );
@@ -56,7 +166,7 @@ export default function Clases() {
     <div>
       <PageHeader
         title="Clases"
-        description="Grilla semanal de clases y horarios del estudio."
+        description="Grilla semanal, horarios y alumnos fijos de cada clase."
         actions={
           <Button onClick={() => setModal({ abierto: true, clase: null })}>
             <Plus className="w-5 h-5" />
@@ -95,11 +205,8 @@ export default function Clases() {
                           <div>
                             <p className="font-semibold">{c.nombre}</p>
                             <p className="text-sm text-muted-foreground">
-                              {formatHora(c.hora_inicio)} – {formatHora(c.hora_fin)}
+                              {formatHora(c.hora_inicio)} – {formatHora(c.hora_fin)} hs
                               {c.instructor && ` · ${c.instructor}`}
-                            </p>
-                            <p className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1">
-                              <Users className="w-4 h-4" /> Cupo: {c.cupo_maximo}
                             </p>
                           </div>
                           <div className="flex gap-1.5">
@@ -119,6 +226,12 @@ export default function Clases() {
                             </IconButton>
                           </div>
                         </div>
+
+                        <InscriptosDeClase
+                          clase={c}
+                          alumnos={alumnos.data ?? []}
+                          onChange={reload}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -140,7 +253,7 @@ export default function Clases() {
       {aEliminar && (
         <ConfirmDialog
           title="Eliminar clase"
-          message={`¿Seguro que querés eliminar la clase "${aEliminar.nombre}" del día ${aEliminar.dia_semana}? Sus reservas también se eliminarán.`}
+          message={`¿Seguro que querés eliminar la clase "${aEliminar.nombre}" del día ${aEliminar.dia_semana}? Sus inscripciones y reservas también se eliminarán.`}
           onConfirm={eliminar}
           onCancel={() => setAEliminar(null)}
         />

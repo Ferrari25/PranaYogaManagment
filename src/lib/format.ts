@@ -30,11 +30,51 @@ export function formatHora(hora: string): string {
   return hora ? hora.slice(0, 5) : "";
 }
 
-/** Link directo a WhatsApp a partir de un teléfono argentino. */
-export function whatsappUrl(telefono: string): string {
+/** Link directo a WhatsApp a partir de un teléfono argentino, con mensaje opcional. */
+export function whatsappUrl(telefono: string, mensaje?: string): string {
   const digits = telefono.replace(/\D/g, "");
-  return `https://wa.me/549${digits}`;
+  const texto = mensaje ? `?text=${encodeURIComponent(mensaje)}` : "";
+  return `https://wa.me/549${digits}${texto}`;
 }
+
+/** Mes actual en formato YYYY-MM. */
+export function mesActualIso(): string {
+  return hoyIso().slice(0, 7);
+}
+
+const NOMBRES_MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+/** Formatea un mes YYYY-MM como "Agosto 2026". */
+export function formatMes(mesIso: string): string {
+  const [anio, mes] = mesIso.split("-").map(Number);
+  return `${NOMBRES_MESES[mes - 1] ?? ""} ${anio}`;
+}
+
+/** Suma o resta meses a un YYYY-MM. */
+export function sumarMeses(mesIso: string, delta: number): string {
+  const [anio, mes] = mesIso.split("-").map(Number);
+  const d = new Date(anio, mes - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Suma exactamente 1 hora a una hora HH:MM (formato 24 hs). */
+export function sumarUnaHora(hora: string): string {
+  const [h, m] = hora.split(":").map(Number);
+  return `${String((h + 1) % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** Opciones de horario en formato 24 hs, cada 30 minutos (06:00 a 22:00). */
+export const HORARIOS_24HS: string[] = (() => {
+  const out: string[] = [];
+  for (let h = 6; h < 22; h++) {
+    out.push(`${String(h).padStart(2, "0")}:00`, `${String(h).padStart(2, "0")}:30`);
+  }
+  out.push("22:00");
+  return out;
+})();
 
 /** Nombre completo de un alumno. */
 export function nombreCompleto(a: { nombre: string; apellido: string }): string {

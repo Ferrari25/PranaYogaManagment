@@ -17,8 +17,10 @@ reservas públicas. Reconstrucción limpia y minimalista de la app original.
 | `/` | Inicio: métricas rápidas del estudio |
 | `/clases` | Grilla semanal de clases y horarios |
 | `/alumnos` | Gestión de miembros, planes y asistencias |
-| `/pagos` | Registro de cobros, filtros y exportación CSV |
+| `/pagos` | Registro de cobros (con pagos divididos), filtros y exportación CSV |
+| `/historico` | Histórico mensual: ingresos, pendientes y lista de deudores |
 | `/planes` | Tarifas y tipos de membresía |
+| `/terapias` | Masajes & Reiki: servicios, turnos y cobros independientes |
 | `/reservas` | Vista admin de reservas + link público |
 | `/book` | **Página pública** para que los clientes reserven su cupo |
 
@@ -36,7 +38,8 @@ npm run dev
 ## Estructura
 
 ```
-supabase/schema.sql      Esquema SQL completo + seed data (pegar en Supabase)
+supabase/schema.sql      Esquema SQL completo + seed data (instalación nueva)
+supabase/migration.sql   Migración incremental para bases ya existentes
 src/
   lib/
     supabase.ts          Cliente de Supabase

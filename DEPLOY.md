@@ -35,6 +35,12 @@ git push -u origin main
 4. Abrí el archivo [`supabase/schema.sql`](supabase/schema.sql) de este
    repositorio, copiá **todo** su contenido, pegalo en el editor y presioná
    **Run**.
+
+   > **¿Ya habías ejecutado schema.sql antes?** Entonces solo te falta lo
+   > nuevo: ejecutá [`supabase/migration.sql`](supabase/migration.sql) de la
+   > misma forma. Agrega las inscripciones a clases, los pagos divididos, el
+   > mes de imputación de cuotas y las tablas de Masajes & Reiki, sin tocar
+   > los datos existentes.
    - Esto crea las 6 tablas (`planes`, `alumnos`, `alumno_planes`, `pagos`,
      `clases`, `reservas`), los índices, las políticas de acceso y carga los
      planes reales del estudio + alumnos de prueba.

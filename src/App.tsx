@@ -5,6 +5,8 @@ import Clases from "./pages/Clases";
 import Alumnos from "./pages/Alumnos";
 import Pagos from "./pages/Pagos";
 import Planes from "./pages/Planes";
+import HistoricoMensual from "./pages/HistoricoMensual";
+import MasajesReiki from "./pages/MasajesReiki";
 import ReservasAdmin from "./pages/ReservasAdmin";
 import ReservasPublicas from "./pages/ReservasPublicas";
 import { isSupabaseConfigured } from "./lib/supabase";
@@ -20,7 +22,9 @@ const router = createBrowserRouter([
       { path: "clases", Component: Clases },
       { path: "alumnos", Component: Alumnos },
       { path: "pagos", Component: Pagos },
+      { path: "historico", Component: HistoricoMensual },
       { path: "planes", Component: Planes },
+      { path: "terapias", Component: MasajesReiki },
       { path: "reservas", Component: ReservasAdmin },
     ],
   },

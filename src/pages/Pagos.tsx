@@ -80,13 +80,15 @@ export default function Pagos() {
   // Exporta el historial completo como CSV (abre en Excel).
   const exportarCSV = () => {
     const filas = [
-      ["Alumno", "Concepto", "Modalidad", "Monto", "Fecha", "Estado", "Notas"],
+      ["Alumno", "Concepto", "Modalidad", "Detalle métodos", "Monto", "Fecha", "Mes cuota", "Estado", "Notas"],
       ...(pagos ?? []).map((p) => [
         nombreAlumno(p.alumno_id),
         p.concepto,
         p.modalidad_pago,
+        (p.metodos_pago ?? []).map((m) => `${m.metodo} $${m.monto}`).join(" + "),
         String(p.monto),
         p.fecha_pago,
+        p.mes_imputacion,
         p.estado,
         p.notas,
       ]),
@@ -153,7 +155,14 @@ export default function Pagos() {
             <tr key={p.id} className="hover:bg-muted/40">
               <td className="px-5 py-4 font-semibold">{nombreAlumno(p.alumno_id)}</td>
               <td className="px-5 py-4">{p.concepto}</td>
-              <td className="px-5 py-4 text-muted-foreground">{p.modalidad_pago}</td>
+              <td
+                className="px-5 py-4 text-muted-foreground"
+                title={(p.metodos_pago ?? [])
+                  .map((m) => `${m.metodo}: ${formatPrecio(Number(m.monto))}`)
+                  .join(" + ")}
+              >
+                {p.modalidad_pago}
+              </td>
               <td className="px-5 py-4 font-bold">{formatPrecio(Number(p.monto))}</td>
               <td className="px-5 py-4 text-muted-foreground">{formatFecha(p.fecha_pago)}</td>
               <td className="px-5 py-4">

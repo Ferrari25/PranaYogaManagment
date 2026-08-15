@@ -55,6 +55,10 @@ CREATE TABLE IF NOT EXISTS pagos (
   concepto       TEXT NOT NULL DEFAULT '',
   monto          NUMERIC(12, 2) NOT NULL DEFAULT 0,
   modalidad_pago TEXT NOT NULL DEFAULT 'Efectivo',
+  -- Detalle de pago combinado: [{"metodo": "Efectivo", "monto": 18000}, ...]
+  metodos_pago   JSONB NOT NULL DEFAULT '[]',
+  -- Mes de la cuota que se está pagando (YYYY-MM), independiente de la fecha de cobro
+  mes_imputacion TEXT NOT NULL DEFAULT to_char(CURRENT_DATE, 'YYYY-MM'),
   estado         TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'completado')),
   fecha_pago     DATE NOT NULL DEFAULT CURRENT_DATE,
   notas          TEXT NOT NULL DEFAULT '',
@@ -90,30 +94,75 @@ CREATE TABLE IF NOT EXISTS reservas (
 );
 
 -- ----------------------------------------------------------------------------
+-- 7. CLASE_ALUMNOS: alumnos fijos inscriptos en cada clase semanal
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS clase_alumnos (
+  clase_id   UUID NOT NULL REFERENCES clases(id) ON DELETE CASCADE,
+  alumno_id  UUID NOT NULL REFERENCES alumnos(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (clase_id, alumno_id)
+);
+
+-- ----------------------------------------------------------------------------
+-- 8. SERVICIOS_TERAPIAS: catálogo de Masajes & Reiki (independiente del yoga)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS servicios_terapias (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre           TEXT NOT NULL,
+  precio           NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  duracion_minutos INTEGER NOT NULL DEFAULT 60 CHECK (duracion_minutos > 0),
+  activo           BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- 9. TURNOS_TERAPIAS: turnos y cobros de Masajes & Reiki
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS turnos_terapias (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  servicio_id      UUID REFERENCES servicios_terapias(id) ON DELETE SET NULL,
+  cliente_nombre   TEXT NOT NULL,
+  cliente_telefono TEXT NOT NULL DEFAULT '',
+  fecha            DATE NOT NULL DEFAULT CURRENT_DATE,
+  hora             TIME NOT NULL DEFAULT '09:00',
+  monto            NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  modalidad_pago   TEXT NOT NULL DEFAULT 'Efectivo',
+  estado           TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('cobrado', 'pendiente')),
+  notas            TEXT NOT NULL DEFAULT '',
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
 -- Índices de rendimiento
 -- ----------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_pagos_alumno    ON pagos(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_pagos_estado    ON pagos(estado);
 CREATE INDEX IF NOT EXISTS idx_pagos_fecha     ON pagos(fecha_pago);
+CREATE INDEX IF NOT EXISTS idx_pagos_mes       ON pagos(mes_imputacion);
 CREATE INDEX IF NOT EXISTS idx_reservas_clase  ON reservas(clase_id);
 CREATE INDEX IF NOT EXISTS idx_reservas_fecha  ON reservas(fecha_reserva);
 CREATE INDEX IF NOT EXISTS idx_alumnos_nombre  ON alumnos(nombre, apellido);
+CREATE INDEX IF NOT EXISTS idx_turnos_fecha    ON turnos_terapias(fecha);
 
 -- ----------------------------------------------------------------------------
 -- Seguridad (RLS): la app opera sin login (panel abierto para el estudio),
 -- por lo que se habilita acceso con la clave anónima a todas las tablas.
 -- ----------------------------------------------------------------------------
-ALTER TABLE planes        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE alumnos       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE alumno_planes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pagos         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE clases        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE reservas      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE planes             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alumnos            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alumno_planes      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pagos              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clases             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reservas           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clase_alumnos      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE servicios_terapias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE turnos_terapias    ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE t TEXT;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['planes', 'alumnos', 'alumno_planes', 'pagos', 'clases', 'reservas'] LOOP
+  FOREACH t IN ARRAY ARRAY['planes', 'alumnos', 'alumno_planes', 'pagos', 'clases', 'reservas',
+                           'clase_alumnos', 'servicios_terapias', 'turnos_terapias'] LOOP
     EXECUTE format('DROP POLICY IF EXISTS "acceso_anon_total" ON %I', t);
     EXECUTE format(
       'CREATE POLICY "acceso_anon_total" ON %I FOR ALL TO anon USING (true) WITH CHECK (true)', t
@@ -146,6 +195,15 @@ SELECT * FROM (VALUES
   ('Vinyasa Flow',  'María',  'Viernes',   '18:30'::time, '19:45'::time, 12)
 ) AS v(nombre, instructor, dia_semana, hora_inicio, hora_fin, cupo_maximo)
 WHERE NOT EXISTS (SELECT 1 FROM clases);
+
+-- Servicios iniciales de Masajes & Reiki (solo si la tabla está vacía)
+INSERT INTO servicios_terapias (nombre, precio, duracion_minutos)
+SELECT * FROM (VALUES
+  ('Masaje Descontracturante', 15000::numeric, 60),
+  ('Sesión de Reiki',          12000::numeric, 60),
+  ('Masaje + Reiki combinado', 20000::numeric, 90)
+) AS v(nombre, precio, duracion_minutos)
+WHERE NOT EXISTS (SELECT 1 FROM servicios_terapias);
 
 -- Alumnos de prueba con plan asignado y pago inicial (solo si la tabla está vacía)
 DO $$
