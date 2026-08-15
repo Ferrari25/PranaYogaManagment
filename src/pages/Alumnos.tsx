@@ -5,13 +5,16 @@ import {
   createAlumno,
   deleteAlumno,
   getAlumnos,
+  getPagos,
   getPlanes,
   registrarAsistencia,
+  sincronizarCuotas,
   updateAlumno,
   type AlumnoInput,
 } from "../lib/api";
 import type { Alumno } from "../lib/types";
 import { nombreCompleto, whatsappUrl } from "../lib/format";
+import { estadoMembresia } from "../lib/membresia";
 import {
   Badge,
   Button,
@@ -32,6 +35,8 @@ type Orden = "nombre" | "nuevos" | "asistencias";
 export default function Alumnos() {
   const { data: alumnos, loading, error, reload } = useData(getAlumnos);
   const planes = useData(getPlanes);
+  // Las cuotas al día determinan el estado de membresía de cada alumno.
+  const pagos = useData(() => sincronizarCuotas().then(getPagos));
   const [busqueda, setBusqueda] = useState("");
   const [planFiltro, setPlanFiltro] = useState("todos");
   const [orden, setOrden] = useState<Orden>("nombre");
@@ -76,6 +81,7 @@ export default function Alumnos() {
     }
     setModal({ abierto: false, alumno: null });
     reload();
+    pagos.reload();
   };
 
   const eliminar = async () => {
@@ -83,6 +89,7 @@ export default function Alumnos() {
     await deleteAlumno(aEliminar.id);
     setAEliminar(null);
     reload();
+    pagos.reload();
   };
 
   const marcarAsistencia = async (a: Alumno) => {
@@ -90,9 +97,9 @@ export default function Alumnos() {
     reload();
   };
 
-  if (loading || planes.loading) return <LoadingState />;
-  if (error) return <ErrorState message={error} />;
-  if (planes.error) return <ErrorState message={planes.error} />;
+  if (loading || planes.loading || pagos.loading) return <LoadingState />;
+  const err = error || planes.error || pagos.error;
+  if (err) return <ErrorState message={err} />;
 
   return (
     <div>
@@ -143,8 +150,12 @@ export default function Alumnos() {
           }
         />
       ) : (
-        <Table headers={["Alumno", "Contacto", "Planes de Membresía", "Asistencia", "Acciones"]}>
-          {filtrados.map((a) => (
+        <Table
+          headers={["Alumno", "Contacto", "Planes de Membresía", "Estado de Cuota", "Asistencia", "Acciones"]}
+        >
+          {filtrados.map((a) => {
+            const estado = estadoMembresia(a, pagos.data ?? []);
+            return (
             <tr key={a.id} className="hover:bg-muted/40">
               <td className="px-5 py-4 font-semibold">{nombreCompleto(a)}</td>
               <td className="px-5 py-4">
@@ -181,6 +192,9 @@ export default function Alumnos() {
                 </div>
               </td>
               <td className="px-5 py-4">
+                {estado ? <Badge tone={estado.tone}>{estado.texto}</Badge> : "—"}
+              </td>
+              <td className="px-5 py-4">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-lg">{a.asistencias_count}</span>
                   <IconButton
@@ -207,7 +221,8 @@ export default function Alumnos() {
                 </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </Table>
       )}
 
