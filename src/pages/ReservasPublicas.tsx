@@ -2,11 +2,11 @@ import { useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 import { useData } from "../hooks/useData";
-import { createReserva, getClases } from "../lib/api";
+import { createReserva, getClases, getOcupacionReservas } from "../lib/api";
 import type { Clase } from "../lib/types";
 import { DIAS_SEMANA } from "../lib/types";
 import { formatFecha, formatHora } from "../lib/format";
-import { Button, ErrorState, Field, Input, LoadingState } from "../components/ui";
+import { Badge, Button, ErrorState, Field, Input, LoadingState } from "../components/ui";
 import { Logo } from "../components/Logo";
 
 /** Próxima fecha (YYYY-MM-DD) en que cae el día de semana de la clase. */
@@ -19,8 +19,22 @@ function proximaFecha(dia: Clase["dia_semana"]): string {
   return `${fecha.getFullYear()}-${mes}-${diaMes}`;
 }
 
+/** Etiqueta de disponibilidad según los lugares libres. */
+function BadgeCupo({ libres }: { libres: number }) {
+  if (libres <= 0) return <Badge tone="danger">Completa</Badge>;
+  if (libres <= 3) {
+    return (
+      <Badge tone="warning">
+        ¡{libres === 1 ? "Último lugar" : `Últimos ${libres} lugares`}!
+      </Badge>
+    );
+  }
+  return <Badge tone="success">Quedan {libres} lugares</Badge>;
+}
+
 export default function ReservasPublicas() {
   const { data: clases, loading, error } = useData(getClases);
+  const ocupacion = useData(getOcupacionReservas);
   const [claseId, setClaseId] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -33,6 +47,16 @@ export default function ReservasPublicas() {
     () => (clases ?? []).find((c) => c.id === claseId) ?? null,
     [clases, claseId]
   );
+
+  /** Lugares libres de una clase para una fecha concreta. */
+  const lugaresLibres = (c: Clase, fechaIso: string): number => {
+    const reservados = (ocupacion.data ?? []).filter(
+      (r) => r.clase_id === c.id && r.fecha_reserva === fechaIso
+    ).length;
+    return c.cupo_maximo - c.alumno_ids.length - reservados;
+  };
+
+  const libresFechaElegida = claseElegida ? lugaresLibres(claseElegida, fecha) : 0;
 
   const elegirClase = (c: Clase) => {
     setClaseId(c.id);
@@ -56,6 +80,7 @@ export default function ReservasPublicas() {
         claseElegida.cupo_maximo
       );
       setConfirmada({ clase: claseElegida, fecha });
+      ocupacion.reload();
     } catch (err) {
       setErrorEnvio((err as Error).message);
     } finally {
@@ -106,46 +131,59 @@ export default function ReservasPublicas() {
           <>
             <h1 className="text-3xl font-bold">Reservá tu clase</h1>
             <p className="text-muted-foreground mt-1 mb-6">
-              Elegí una clase de la semana y completá tus datos. ¡Es muy fácil!
+              Elegí una clase con lugar disponible y completá tus datos. ¡Es muy fácil!
             </p>
 
-            {loading && <LoadingState />}
+            {(loading || ocupacion.loading) && <LoadingState />}
             {error && <ErrorState message={error} />}
+            {ocupacion.error && <ErrorState message={ocupacion.error} />}
 
-            {/* Paso 1: elegir clase */}
-            {clases && (
+            {/* Paso 1: elegir clase (muestra el cupo de la próxima fecha) */}
+            {clases && ocupacion.data && (
               <div className="space-y-3 mb-8">
                 {clases.length === 0 && (
                   <p className="text-muted-foreground">Por el momento no hay clases disponibles.</p>
                 )}
-                {clases.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => elegirClase(c)}
-                    className={clsx(
-                      "w-full flex items-center justify-between rounded-2xl border-2 px-5 py-4 text-left transition-colors",
-                      claseId === c.id
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-card hover:bg-muted"
-                    )}
-                    aria-pressed={claseId === c.id}
-                  >
-                    <div>
-                      <p className="text-lg font-bold">{c.nombre}</p>
-                      <p className="text-muted-foreground">
-                        {c.dia_semana} · {formatHora(c.hora_inicio)} – {formatHora(c.hora_fin)} hs
-                        {c.instructor && ` · ${c.instructor}`}
-                      </p>
-                    </div>
-                    <span
+                {clases.map((c) => {
+                  const fechaCard = claseId === c.id && fecha ? fecha : proximaFecha(c.dia_semana);
+                  const libres = lugaresLibres(c, fechaCard);
+                  const completa = libres <= 0;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => elegirClase(c)}
+                      disabled={completa}
                       className={clsx(
-                        "w-6 h-6 rounded-full border-2 shrink-0",
-                        claseId === c.id ? "border-primary bg-primary" : "border-border"
+                        "w-full flex items-center justify-between gap-3 rounded-2xl border-2 px-5 py-4 text-left transition-colors",
+                        claseId === c.id
+                          ? "border-primary bg-primary/10"
+                          : completa
+                            ? "border-border bg-muted/60 opacity-70 cursor-not-allowed"
+                            : "border-border bg-card hover:bg-muted"
                       )}
-                      aria-hidden="true"
-                    />
-                  </button>
-                ))}
+                      aria-pressed={claseId === c.id}
+                    >
+                      <div>
+                        <p className="text-lg font-bold">{c.nombre}</p>
+                        <p className="text-muted-foreground">
+                          {c.dia_semana} · {formatHora(c.hora_inicio)} – {formatHora(c.hora_fin)} hs
+                          {c.instructor && ` · ${c.instructor}`}
+                        </p>
+                        <div className="mt-2">
+                          <BadgeCupo libres={libres} />
+                        </div>
+                      </div>
+                      <span
+                        className={clsx(
+                          "w-6 h-6 rounded-full border-2 shrink-0",
+                          claseId === c.id ? "border-primary bg-primary" : "border-border",
+                          completa && "opacity-40"
+                        )}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -182,9 +220,29 @@ export default function ReservasPublicas() {
                   />
                 </Field>
 
+                {/* Disponibilidad para la fecha elegida */}
+                {fecha && (
+                  <p
+                    className={clsx(
+                      "rounded-xl px-4 py-3 font-semibold",
+                      libresFechaElegida > 0
+                        ? "bg-success-bg text-success"
+                        : "bg-danger-bg text-danger"
+                    )}
+                  >
+                    {libresFechaElegida > 0
+                      ? `Hay ${libresFechaElegida} ${libresFechaElegida === 1 ? "lugar disponible" : "lugares disponibles"} para el ${formatFecha(fecha)}.`
+                      : `No queda lugar para el ${formatFecha(fecha)}. Probá con la semana siguiente.`}
+                  </p>
+                )}
+
                 {errorEnvio && <p className="text-danger font-semibold">{errorEnvio}</p>}
 
-                <Button type="submit" disabled={enviando} className="w-full text-lg py-4">
+                <Button
+                  type="submit"
+                  disabled={enviando || libresFechaElegida <= 0}
+                  className="w-full text-lg py-4"
+                >
                   {enviando ? "Reservando…" : "Confirmar mi reserva"}
                 </Button>
               </form>

@@ -228,20 +228,48 @@ export async function getReservas(): Promise<Reserva[]> {
   return check(data, error);
 }
 
-/** Crea una reserva pública validando el cupo disponible de la clase. */
+/**
+ * Ocupación de reservas confirmadas, sin datos personales: apta para
+ * calcular cupos disponibles en la página pública.
+ */
+export interface OcupacionReserva {
+  clase_id: string;
+  fecha_reserva: string;
+}
+
+export async function getOcupacionReservas(): Promise<OcupacionReserva[]> {
+  const { data, error } = await supabase
+    .from("reservas")
+    .select("clase_id, fecha_reserva")
+    .eq("estado", "confirmada");
+  return check(data, error);
+}
+
+/**
+ * Crea una reserva pública validando el cupo real de la clase para esa fecha:
+ * lugares = cupo máximo − alumnos fijos inscriptos − reservas confirmadas.
+ */
 export async function createReserva(
   input: Omit<Reserva, "id" | "estado">,
   cupoMaximo: number
 ): Promise<void> {
-  const { count, error: countError } = await supabase
-    .from("reservas")
-    .select("id", { count: "exact", head: true })
-    .eq("clase_id", input.clase_id)
-    .eq("fecha_reserva", input.fecha_reserva)
-    .eq("estado", "confirmada");
-  check(null, countError);
+  const [reservasRes, fijosRes] = await Promise.all([
+    supabase
+      .from("reservas")
+      .select("id", { count: "exact", head: true })
+      .eq("clase_id", input.clase_id)
+      .eq("fecha_reserva", input.fecha_reserva)
+      .eq("estado", "confirmada"),
+    supabase
+      .from("clase_alumnos")
+      .select("alumno_id", { count: "exact", head: true })
+      .eq("clase_id", input.clase_id),
+  ]);
+  check(null, reservasRes.error);
+  check(null, fijosRes.error);
 
-  if ((count ?? 0) >= cupoMaximo) {
+  const ocupados = (reservasRes.count ?? 0) + (fijosRes.count ?? 0);
+  if (ocupados >= cupoMaximo) {
     throw new Error("La clase ya no tiene cupo disponible para esa fecha.");
   }
 
