@@ -60,6 +60,20 @@ export function sumarMeses(mesIso: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/**
+ * Suma meses a una fecha YYYY-MM-DD manteniendo el día (ancla de la cuota).
+ * Si el mes destino es más corto, ajusta al último día (31/1 -> 28/2).
+ */
+export function sumarMesesFecha(fechaIso: string, delta: number): string {
+  const [anio, mes, dia] = fechaIso.split("-").map(Number);
+  const totalMeses = mes - 1 + delta;
+  const anioDestino = anio + Math.floor(totalMeses / 12);
+  const mesDestino = ((totalMeses % 12) + 12) % 12;
+  const ultimoDia = new Date(anioDestino, mesDestino + 1, 0).getDate();
+  const diaDestino = Math.min(dia, ultimoDia);
+  return `${anioDestino}-${String(mesDestino + 1).padStart(2, "0")}-${String(diaDestino).padStart(2, "0")}`;
+}
+
 /** Suma exactamente 1 hora a una hora HH:MM (formato 24 hs). */
 export function sumarUnaHora(hora: string): string {
   const [h, m] = hora.split(":").map(Number);

@@ -1,7 +1,22 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, TrendingUp, Clock, MessageCircle, HandCoins } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
+  Clock,
+  MessageCircle,
+  HandCoins,
+  AlertTriangle,
+} from "lucide-react";
 import { useData } from "../hooks/useData";
-import { createPago, getAlumnos, getPagos, getPlanes, setEstadoPago } from "../lib/api";
+import {
+  createPago,
+  getAlumnos,
+  getPagos,
+  getPlanes,
+  setEstadoPago,
+  sincronizarCuotas,
+} from "../lib/api";
 import type { Alumno, Pago } from "../lib/types";
 import {
   formatMes,
@@ -37,12 +52,18 @@ interface Deudor {
   /** Monto adeudado: el del pago pendiente, o la cuota esperada por sus planes. */
   monto: number;
   concepto: string;
+  /** Cuotas pendientes de meses ANTERIORES al seleccionado (deuda acumulada). */
+  deudaPrevia: number;
+  mesesPrevios: string[];
 }
 
 export default function HistoricoMensual() {
   const alumnos = useData(getAlumnos);
   const planes = useData(getPlanes);
-  const { data: pagos, loading, error, reload } = useData(getPagos);
+  // La sincronización genera las cuotas de los ciclos vencidos antes de listar.
+  const { data: pagos, loading, error, reload } = useData(() =>
+    sincronizarCuotas().then(getPagos)
+  );
 
   const [mes, setMes] = useState(() =>
     mesActualIso() < MES_INICIO ? MES_INICIO : mesActualIso()
@@ -65,6 +86,14 @@ export default function HistoricoMensual() {
     .filter((p) => p.estado === "pendiente")
     .reduce((sum, p) => sum + Number(p.monto), 0);
 
+  // Deuda acumulada: cuotas pendientes de meses anteriores al seleccionado,
+  // de alumnos activos.
+  const idsActivos = new Set((alumnos.data ?? []).map((a) => a.id));
+  const pendientesPrevios = listaPagos.filter(
+    (p) => p.estado === "pendiente" && mesDelPago(p) < mes && idsActivos.has(p.alumno_id)
+  );
+  const deudaAcumulada = pendientesPrevios.reduce((sum, p) => sum + Number(p.monto), 0);
+
   // Deudores del mes: SOLO alumnos con planes asignados que no tienen ningún
   // pago completado imputado a este mes. Los que ya pagaron no aparecen.
   const deudores: Deudor[] = (alumnos.data ?? [])
@@ -77,12 +106,16 @@ export default function HistoricoMensual() {
       const cuota = susPlanes.reduce((sum, p) => sum + Number(p.precio), 0);
       const pagoPendiente = susPagos.find((p) => p.estado === "pendiente") ?? null;
 
+      const susPrevios = pendientesPrevios.filter((p) => p.alumno_id === a.id);
+
       return [
         {
           alumno: a,
           pagoPendiente,
           monto: pagoPendiente ? Number(pagoPendiente.monto) : cuota,
           concepto: pagoPendiente?.concepto || susPlanes.map((p) => p.nombre).join(" + "),
+          deudaPrevia: susPrevios.reduce((sum, p) => sum + Number(p.monto), 0),
+          mesesPrevios: susPrevios.map((p) => formatMes(mesDelPago(p))),
         },
       ];
     })
@@ -143,7 +176,7 @@ export default function HistoricoMensual() {
       </div>
 
       {/* Métricas del mes */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <div className="flex items-center gap-3 text-muted-foreground">
             <TrendingUp className="w-5 h-5" />
@@ -166,6 +199,17 @@ export default function HistoricoMensual() {
             {formatPrecio(pendientePorCobrar)}
           </p>
         </div>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <AlertTriangle className="w-5 h-5" />
+            <span className="text-sm font-semibold uppercase tracking-wide">
+              Deuda acumulada de meses anteriores
+            </span>
+          </div>
+          <p className="text-3xl font-bold font-serif mt-3 text-danger">
+            {formatPrecio(deudaAcumulada)}
+          </p>
+        </div>
       </div>
 
       {/* Lista exclusiva de deudores */}
@@ -182,7 +226,17 @@ export default function HistoricoMensual() {
         <Table headers={["Alumno", "Concepto", "Monto adeudado", "Estado", "Acciones"]}>
           {deudores.map((d) => (
             <tr key={d.alumno.id} className="hover:bg-muted/40">
-              <td className="px-5 py-4 font-semibold">{nombreCompleto(d.alumno)}</td>
+              <td className="px-5 py-4">
+                <p className="font-semibold">{nombreCompleto(d.alumno)}</p>
+                {d.deudaPrevia > 0 && (
+                  <p
+                    className="text-sm font-bold text-danger mt-1"
+                    title={`Meses adeudados: ${d.mesesPrevios.join(", ")}`}
+                  >
+                    Debe también {d.mesesPrevios.join(" y ")} (+{formatPrecio(d.deudaPrevia)})
+                  </p>
+                )}
+              </td>
               <td className="px-5 py-4 text-muted-foreground">{d.concepto || "—"}</td>
               <td className="px-5 py-4 font-bold">{formatPrecio(d.monto)}</td>
               <td className="px-5 py-4">

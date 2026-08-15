@@ -9,6 +9,7 @@ import {
   getPagos,
   getPlanes,
   setEstadoPago,
+  sincronizarCuotas,
   updatePago,
 } from "../lib/api";
 import type { Pago } from "../lib/types";
@@ -35,7 +36,10 @@ const FILTROS: { valor: Filtro; etiqueta: string }[] = [
 ];
 
 export default function Pagos() {
-  const { data: pagos, loading, error, reload } = useData(getPagos);
+  // La sincronización genera las cuotas pendientes de cada ciclo antes de listar.
+  const { data: pagos, loading, error, reload } = useData(() =>
+    sincronizarCuotas().then(getPagos)
+  );
   const alumnos = useData(getAlumnos);
   const planes = useData(getPlanes);
   const [filtro, setFiltro] = useState<Filtro>("todos");

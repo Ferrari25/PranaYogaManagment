@@ -1,6 +1,6 @@
 import { Users, CalendarDays, TrendingUp, Clock } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { getAlumnos, getClases, getPagos } from "../lib/api";
+import { getAlumnos, getClases, getPagos, sincronizarCuotas } from "../lib/api";
 import { formatFecha, formatHora, formatPrecio, hoyDiaSemana, nombreCompleto } from "../lib/format";
 import { Badge, ErrorState, LoadingState } from "../components/ui";
 import type { ReactNode } from "react";
@@ -30,7 +30,8 @@ function StatCard({
 
 export default function Inicio() {
   const alumnos = useData(getAlumnos);
-  const pagos = useData(getPagos);
+  // Al abrir el panel se generan las cuotas de los ciclos que hayan vencido.
+  const pagos = useData(() => sincronizarCuotas().then(getPagos));
   const clases = useData(getClases);
 
   if (alumnos.loading || pagos.loading || clases.loading) return <LoadingState />;

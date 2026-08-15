@@ -2,6 +2,7 @@
 // Cada función lanza Error con mensaje legible si Supabase responde con error.
 
 import { supabase } from "./supabase";
+import { hoyIso, sumarMesesFecha } from "./format";
 import type {
   Alumno,
   Clase,
@@ -122,7 +123,15 @@ async function setPlanesDeAlumno(alumnoId: string, planIds: string[]): Promise<v
 }
 
 export async function deleteAlumno(id: string): Promise<void> {
-  // Borrado lógico: conserva pagos e historial.
+  // Borrado lógico: conserva el historial de pagos completados, pero elimina
+  // las cuotas pendientes (nunca se van a cobrar y ensuciarían las métricas).
+  const { error: pagosError } = await supabase
+    .from("pagos")
+    .delete()
+    .eq("alumno_id", id)
+    .eq("estado", "pendiente");
+  check(null, pagosError);
+
   const { error } = await supabase.from("alumnos").update({ activo: false }).eq("id", id);
   check(null, error);
 }
@@ -138,6 +147,88 @@ export async function registrarAsistencia(alumno: Alumno): Promise<void> {
 // ---------------------------------------------------------------------------
 // PAGOS
 // ---------------------------------------------------------------------------
+
+/** Fechas de inicio de ciclo del alumno (día de alta anclado) hasta hoy. */
+function ciclosDesde(fechaAlta: string, hastaIso: string): string[] {
+  const ciclos: string[] = [];
+  for (let i = 0; i < 240; i++) {
+    const ciclo = sumarMesesFecha(fechaAlta, i);
+    if (ciclo > hastaIso) break;
+    ciclos.push(ciclo);
+  }
+  return ciclos;
+}
+
+let sincronizacionEnCurso: Promise<void> | null = null;
+
+/**
+ * Motor de cuotas tipo suscripción, anclado a la fecha de alta de cada alumno
+ * (alta el 15/8 -> cuotas que vencen el 15/9, 15/10, ...).
+ *
+ * Reglas (deterministas, a prueba de duplicados):
+ *  - Cada ciclo ya iniciado debe tener EXACTAMENTE un pago (del estado que
+ *    sea). Si no existe ninguno para ese mes, se crea uno pendiente con
+ *    vencimiento en la fecha del ciclo.
+ *  - Si la cuota del ciclo vigente ya está completada, se pre-genera la
+ *    pendiente del ciclo siguiente (así el pago "renueva" como suscripción).
+ *  - Nunca se modifica ni duplica un pago existente: si ya hay un pago para
+ *    ese alumno y ese mes, no se toca.
+ */
+export function sincronizarCuotas(): Promise<void> {
+  // Evita corridas simultáneas (por ejemplo, dos pantallas cargando a la vez).
+  sincronizacionEnCurso ??= (async () => {
+    const [alumnos, planes, pagos] = await Promise.all([getAlumnos(), getPlanes(), getPagos()]);
+    const hoy = hoyIso();
+    const filas: Array<Omit<Pago, "id">> = [];
+
+    for (const alumno of alumnos) {
+      const susPlanes = planes.filter((p) => alumno.plan_ids.includes(p.id));
+      if (susPlanes.length === 0 || !alumno.fecha_alta) continue;
+
+      const monto = susPlanes.reduce((sum, p) => sum + Number(p.precio), 0);
+      const concepto = susPlanes.map((p) => p.nombre).join(" + ");
+      const mesesConPago = new Set(
+        pagos.filter((p) => p.alumno_id === alumno.id).map((p) => p.mes_imputacion)
+      );
+
+      const ciclos = ciclosDesde(alumno.fecha_alta, hoy);
+
+      // Si la cuota del ciclo vigente ya se pagó, sumamos el ciclo siguiente.
+      const mesVigente = ciclos[ciclos.length - 1]?.slice(0, 7);
+      const cuotaVigente = pagos.find(
+        (p) => p.alumno_id === alumno.id && p.mes_imputacion === mesVigente
+      );
+      if (cuotaVigente?.estado === "completado") {
+        ciclos.push(sumarMesesFecha(alumno.fecha_alta, ciclos.length));
+      }
+
+      for (const inicioCiclo of ciclos) {
+        const mes = inicioCiclo.slice(0, 7);
+        if (mesesConPago.has(mes)) continue;
+        filas.push({
+          alumno_id: alumno.id,
+          concepto,
+          monto,
+          modalidad_pago: "Efectivo",
+          metodos_pago: [],
+          mes_imputacion: mes,
+          estado: "pendiente",
+          fecha_pago: inicioCiclo,
+          notas: "",
+        });
+      }
+    }
+
+    if (filas.length > 0) {
+      const { error } = await supabase.from("pagos").insert(filas);
+      check(null, error);
+    }
+  })().finally(() => {
+    sincronizacionEnCurso = null;
+  });
+  return sincronizacionEnCurso;
+}
+
 export async function getPagos(): Promise<Pago[]> {
   const { data, error } = await supabase
     .from("pagos")
