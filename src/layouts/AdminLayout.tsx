@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router";
 import {
   LayoutDashboard,
@@ -13,6 +14,8 @@ import {
 import clsx from "clsx";
 import { Logo } from "../components/Logo";
 import { supabase } from "../lib/supabase";
+import { getReservas } from "../lib/api";
+import { contarReservasNuevas, EVENTO_RESERVAS_VISTAS } from "../lib/reservasNuevas";
 
 const navegacion = [
   { nombre: "Inicio", href: "/", icono: LayoutDashboard },
@@ -26,6 +29,31 @@ const navegacion = [
 ];
 
 export default function AdminLayout() {
+  const [reservasNuevas, setReservasNuevas] = useState(0);
+
+  // Recalcula el aviso al abrir el panel, cada minuto, y cuando la pantalla
+  // de Reservas marca todo como visto.
+  useEffect(() => {
+    let activo = true;
+    const calcular = () => {
+      getReservas()
+        .then((reservas) => {
+          if (activo) setReservasNuevas(contarReservasNuevas(reservas));
+        })
+        .catch(() => {
+          /* sin conexión o sin permisos: el aviso simplemente no se muestra */
+        });
+    };
+    calcular();
+    const timer = setInterval(calcular, 60_000);
+    window.addEventListener(EVENTO_RESERVAS_VISTAS, calcular);
+    return () => {
+      activo = false;
+      clearInterval(timer);
+      window.removeEventListener(EVENTO_RESERVAS_VISTAS, calcular);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-card border-b md:border-b-0 md:border-r border-border md:min-h-screen flex flex-col shadow-sm shrink-0">
@@ -59,7 +87,15 @@ export default function AdminLayout() {
               }
             >
               <item.icono className="w-5 h-5 shrink-0" />
-              {item.nombre}
+              <span className="flex-1">{item.nombre}</span>
+              {item.href === "/reservas" && reservasNuevas > 0 && (
+                <span
+                  className="min-w-6 h-6 px-1.5 rounded-full bg-danger text-white text-sm font-bold flex items-center justify-center"
+                  title={`${reservasNuevas} reserva(s) nueva(s)`}
+                >
+                  {reservasNuevas}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

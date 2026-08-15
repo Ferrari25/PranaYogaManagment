@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ExternalLink, Copy, Check, XCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { cancelarReserva, getClases, getReservas } from "../lib/api";
+import { marcarReservasVistas } from "../lib/reservasNuevas";
 import type { Reserva } from "../lib/types";
 import { formatFecha, formatHora, whatsappUrl } from "../lib/format";
 import {
@@ -21,6 +22,11 @@ export default function ReservasAdmin() {
   const clases = useData(getClases);
   const [copiado, setCopiado] = useState(false);
   const [aCancelar, setACancelar] = useState<Reserva | null>(null);
+
+  // Al entrar a esta pantalla, el aviso de reservas nuevas del sidebar se limpia.
+  useEffect(() => {
+    if (!loading) marcarReservasVistas();
+  }, [loading]);
 
   const urlPublica = `${window.location.origin}/book`;
 

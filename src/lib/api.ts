@@ -247,7 +247,9 @@ export async function getOcupacionReservas(): Promise<OcupacionReserva[]> {
  * Crea una reserva pública mediante la función segura `crear_reserva`, que
  * valida el cupo real en el servidor (alumnos fijos + reservas confirmadas).
  */
-export async function createReserva(input: Omit<Reserva, "id" | "estado">): Promise<void> {
+export async function createReserva(
+  input: Omit<Reserva, "id" | "estado" | "created_at">
+): Promise<void> {
   const { error } = await supabase.rpc("crear_reserva", {
     p_clase_id: input.clase_id,
     p_nombre: input.alumno_nombre,

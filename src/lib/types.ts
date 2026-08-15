@@ -83,6 +83,7 @@ export interface Reserva {
   alumno_telefono: string;
   fecha_reserva: string; // YYYY-MM-DD
   estado: EstadoReserva;
+  created_at: string; // timestamp de creación, para detectar reservas nuevas
 }
 
 export const MODALIDADES_PAGO = [
