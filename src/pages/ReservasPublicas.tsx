@@ -70,15 +70,12 @@ export default function ReservasPublicas() {
     setEnviando(true);
     setErrorEnvio(null);
     try {
-      await createReserva(
-        {
-          clase_id: claseElegida.id,
-          alumno_nombre: nombre.trim(),
-          alumno_telefono: telefono.trim(),
-          fecha_reserva: fecha,
-        },
-        claseElegida.cupo_maximo
-      );
+      await createReserva({
+        clase_id: claseElegida.id,
+        alumno_nombre: nombre.trim(),
+        alumno_telefono: telefono.trim(),
+        fecha_reserva: fecha,
+      });
       setConfirmada({ clase: claseElegida, fecha });
       ocupacion.reload();
     } catch (err) {

@@ -40,12 +40,24 @@ git push -u origin main
    > nuevo: ejecutá [`supabase/migration.sql`](supabase/migration.sql) de la
    > misma forma. Agrega las inscripciones a clases, los pagos divididos, el
    > mes de imputación de cuotas y las tablas de Masajes & Reiki, sin tocar
-   > los datos existentes.
+   > los datos existentes. Después ejecutá también
+   > [`supabase/migration-seguridad.sql`](supabase/migration-seguridad.sql)
+   > (ver el paso siguiente).
+
+5. **Login del panel:** ejecutá
+   [`supabase/migration-seguridad.sql`](supabase/migration-seguridad.sql) en el
+   SQL Editor (las instalaciones nuevas ya lo traen incluido en `schema.sql`).
+   Luego creá el usuario administrador:
+   - Andá a **Authentication → Users → Add user → Create new user**.
+   - Cargá el email y una contraseña, y activá **Auto Confirm User**.
+   - Con ese email y contraseña se entra al panel. La sesión queda guardada en
+     el navegador: se inicia sesión una sola vez por dispositivo.
+   - La página pública de reservas (`/book`) no requiere login.
    - Esto crea las 6 tablas (`planes`, `alumnos`, `alumno_planes`, `pagos`,
      `clases`, `reservas`), los índices, las políticas de acceso y carga los
      planes reales del estudio + alumnos de prueba.
    - El script es idempotente: se puede ejecutar más de una vez sin romper nada.
-5. Andá a **Project Settings → API** y copiá dos valores:
+6. Andá a **Project Settings → API** y copiá dos valores:
    - **Project URL** (ej: `https://abcd1234.supabase.co`)
    - **anon public key** (una clave larga que empieza con `eyJ…`)
 

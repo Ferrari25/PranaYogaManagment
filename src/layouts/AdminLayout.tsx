@@ -8,9 +8,11 @@ import {
   Sparkles,
   HeartHandshake,
   BookmarkCheck,
+  LogOut,
 } from "lucide-react";
 import clsx from "clsx";
 import { Logo } from "../components/Logo";
+import { supabase } from "../lib/supabase";
 
 const navegacion = [
   { nombre: "Inicio", href: "/", icono: LayoutDashboard },
@@ -62,19 +64,27 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        {/* Footer: perfil administrador simplificado */}
-        <div className="p-4 border-t border-border mt-auto hidden md:block">
+        {/* Footer: perfil administrador + cierre de sesión */}
+        <div className="p-4 border-t border-border mt-auto">
           <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-9 h-9 rounded-full bg-secondary text-white flex items-center justify-center font-bold text-sm">
+            <div className="w-9 h-9 rounded-full bg-secondary text-white flex items-center justify-center font-bold text-sm shrink-0">
               AD
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">Administración</p>
               <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-success inline-block" />
-                Estudio activo
+                Sesión iniciada
               </p>
             </div>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              title="Cerrar sesión"
+              aria-label="Cerrar sesión"
+              className="p-2.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-danger transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </aside>

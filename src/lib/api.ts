@@ -229,8 +229,9 @@ export async function getReservas(): Promise<Reserva[]> {
 }
 
 /**
- * Ocupación de reservas confirmadas, sin datos personales: apta para
- * calcular cupos disponibles en la página pública.
+ * Ocupación de reservas confirmadas, sin datos personales. Usa la función
+ * segura `ocupacion_reservas` de la base: es lo único que el público puede
+ * consultar sobre reservas.
  */
 export interface OcupacionReserva {
   clase_id: string;
@@ -238,42 +239,21 @@ export interface OcupacionReserva {
 }
 
 export async function getOcupacionReservas(): Promise<OcupacionReserva[]> {
-  const { data, error } = await supabase
-    .from("reservas")
-    .select("clase_id, fecha_reserva")
-    .eq("estado", "confirmada");
+  const { data, error } = await supabase.rpc("ocupacion_reservas");
   return check(data, error);
 }
 
 /**
- * Crea una reserva pública validando el cupo real de la clase para esa fecha:
- * lugares = cupo máximo − alumnos fijos inscriptos − reservas confirmadas.
+ * Crea una reserva pública mediante la función segura `crear_reserva`, que
+ * valida el cupo real en el servidor (alumnos fijos + reservas confirmadas).
  */
-export async function createReserva(
-  input: Omit<Reserva, "id" | "estado">,
-  cupoMaximo: number
-): Promise<void> {
-  const [reservasRes, fijosRes] = await Promise.all([
-    supabase
-      .from("reservas")
-      .select("id", { count: "exact", head: true })
-      .eq("clase_id", input.clase_id)
-      .eq("fecha_reserva", input.fecha_reserva)
-      .eq("estado", "confirmada"),
-    supabase
-      .from("clase_alumnos")
-      .select("alumno_id", { count: "exact", head: true })
-      .eq("clase_id", input.clase_id),
-  ]);
-  check(null, reservasRes.error);
-  check(null, fijosRes.error);
-
-  const ocupados = (reservasRes.count ?? 0) + (fijosRes.count ?? 0);
-  if (ocupados >= cupoMaximo) {
-    throw new Error("La clase ya no tiene cupo disponible para esa fecha.");
-  }
-
-  const { error } = await supabase.from("reservas").insert({ ...input, estado: "confirmada" });
+export async function createReserva(input: Omit<Reserva, "id" | "estado">): Promise<void> {
+  const { error } = await supabase.rpc("crear_reserva", {
+    p_clase_id: input.clase_id,
+    p_nombre: input.alumno_nombre,
+    p_telefono: input.alumno_telefono,
+    p_fecha: input.fecha_reserva,
+  });
   check(null, error);
 }
 

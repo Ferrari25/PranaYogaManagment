@@ -24,8 +24,11 @@ reservas públicas. Reconstrucción limpia y minimalista de la app original.
 | `/reservas` | Vista admin de reservas + link público |
 | `/book` | **Página pública** para que los clientes reserven su cupo |
 
-No hay login: el panel está abierto para la administración del estudio
-(diseñado para cero fricción, tipografía grande y botones claros).
+El panel administrativo requiere iniciar sesión (usuario de Supabase Auth);
+la sesión persiste en el navegador, así que se ingresa una sola vez por
+dispositivo. La página pública `/book` no requiere login. La base de datos
+exige sesión para todo lo administrativo: el público solo puede ver la grilla
+de clases y crear reservas validadas.
 
 ## Desarrollo local
 

@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider } from "react-router";
 import AdminLayout from "./layouts/AdminLayout";
+import RequireAuth from "./components/RequireAuth";
 import Inicio from "./pages/Inicio";
 import Clases from "./pages/Clases";
 import Alumnos from "./pages/Alumnos";
@@ -12,20 +13,25 @@ import ReservasPublicas from "./pages/ReservasPublicas";
 import { isSupabaseConfigured } from "./lib/supabase";
 
 const router = createBrowserRouter([
-  // Vista pública para clientes: sin sidebar de administración
+  // Vista pública para clientes: sin login y sin sidebar de administración
   { path: "/book", Component: ReservasPublicas },
   {
     path: "/",
-    Component: AdminLayout,
+    Component: RequireAuth, // todo lo administrativo exige sesión iniciada
     children: [
-      { index: true, Component: Inicio },
-      { path: "clases", Component: Clases },
-      { path: "alumnos", Component: Alumnos },
-      { path: "pagos", Component: Pagos },
-      { path: "historico", Component: HistoricoMensual },
-      { path: "planes", Component: Planes },
-      { path: "terapias", Component: MasajesReiki },
-      { path: "reservas", Component: ReservasAdmin },
+      {
+        Component: AdminLayout,
+        children: [
+          { index: true, Component: Inicio },
+          { path: "clases", Component: Clases },
+          { path: "alumnos", Component: Alumnos },
+          { path: "pagos", Component: Pagos },
+          { path: "historico", Component: HistoricoMensual },
+          { path: "planes", Component: Planes },
+          { path: "terapias", Component: MasajesReiki },
+          { path: "reservas", Component: ReservasAdmin },
+        ],
+      },
     ],
   },
 ]);
