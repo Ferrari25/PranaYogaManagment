@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
-import { Plus, Search, Pencil, Trash2, Mail, CheckCircle2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Phone } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
   createAlumno,
   deleteAlumno,
   getAlumnos,
+  getAsistencias,
   getPagos,
   getPlanes,
-  registrarAsistencia,
   sincronizarCuotas,
   updateAlumno,
   type AlumnoInput,
@@ -15,6 +15,7 @@ import {
 import type { Alumno } from "../lib/types";
 import { nombreCompleto, whatsappUrl } from "../lib/format";
 import { estadoMembresia } from "../lib/membresia";
+import { clasesAFavor, totalPresentes } from "../lib/asistencias";
 import {
   Badge,
   Button,
@@ -37,6 +38,7 @@ export default function Alumnos() {
   const planes = useData(getPlanes);
   // Las cuotas al día determinan el estado de membresía de cada alumno.
   const pagos = useData(() => sincronizarCuotas().then(getPagos));
+  const asistencias = useData(getAsistencias);
   const [busqueda, setBusqueda] = useState("");
   const [planFiltro, setPlanFiltro] = useState("todos");
   const [orden, setOrden] = useState<Orden>("nombre");
@@ -51,7 +53,7 @@ export default function Alumnos() {
     let lista = alumnos ?? [];
     if (term) {
       lista = lista.filter((a) =>
-        [a.nombre, a.apellido, a.telefono, a.email].some((campo) =>
+        [a.nombre, a.apellido, a.telefono, a.telefono_alt].some((campo) =>
           campo.toLowerCase().includes(term)
         )
       );
@@ -64,12 +66,13 @@ export default function Alumnos() {
     if (orden === "nuevos") {
       ordenada.sort((a, b) => b.fecha_alta.localeCompare(a.fecha_alta));
     } else if (orden === "asistencias") {
-      ordenada.sort((a, b) => b.asistencias_count - a.asistencias_count);
+      const lista_a = asistencias.data ?? [];
+      ordenada.sort((a, b) => totalPresentes(b.id, lista_a) - totalPresentes(a.id, lista_a));
     } else {
       ordenada.sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)));
     }
     return ordenada;
-  }, [alumnos, busqueda, planFiltro, orden]);
+  }, [alumnos, busqueda, planFiltro, orden, asistencias.data]);
 
   const nombrePlan = (id: string) => planes.data?.find((p) => p.id === id)?.nombre ?? "";
 
@@ -92,13 +95,8 @@ export default function Alumnos() {
     pagos.reload();
   };
 
-  const marcarAsistencia = async (a: Alumno) => {
-    await registrarAsistencia(a);
-    reload();
-  };
-
-  if (loading || planes.loading || pagos.loading) return <LoadingState />;
-  const err = error || planes.error || pagos.error;
+  if (loading || planes.loading || pagos.loading || asistencias.loading) return <LoadingState />;
+  const err = error || planes.error || pagos.error || asistencias.error;
   if (err) return <ErrorState message={err} />;
 
   return (
@@ -155,6 +153,8 @@ export default function Alumnos() {
         >
           {filtrados.map((a) => {
             const estado = estadoMembresia(a, pagos.data ?? []);
+            const presentes = totalPresentes(a.id, asistencias.data ?? []);
+            const aFavor = clasesAFavor(a.id, asistencias.data ?? []);
             return (
             <tr key={a.id} className="hover:bg-muted/40">
               <td className="px-5 py-4 font-semibold">{nombreCompleto(a)}</td>
@@ -171,9 +171,12 @@ export default function Alumnos() {
                       {a.telefono}
                     </a>
                   )}
-                  {a.email && (
-                    <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <Mail className="w-4 h-4" /> {a.email}
+                  {a.telefono_alt && (
+                    <span
+                      className="flex items-center gap-1.5 text-sm text-muted-foreground"
+                      title="Teléfono alternativo"
+                    >
+                      <Phone className="w-4 h-4" /> {a.telefono_alt}
                     </span>
                   )}
                 </div>
@@ -195,15 +198,15 @@ export default function Alumnos() {
                 {estado ? <Badge tone={estado.tone}>{estado.texto}</Badge> : "—"}
               </td>
               <td className="px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-lg">{a.asistencias_count}</span>
-                  <IconButton
-                    title="Registrar asistencia"
-                    onClick={() => marcarAsistencia(a)}
-                    className="text-success"
-                  >
-                    <CheckCircle2 className="w-5 h-5" />
-                  </IconButton>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-lg" title="Clases con presente">
+                    {presentes}
+                  </span>
+                  {aFavor > 0 && (
+                    <Badge tone="primary">
+                      {aFavor} a favor
+                    </Badge>
+                  )}
                 </div>
               </td>
               <td className="px-5 py-4">

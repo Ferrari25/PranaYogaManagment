@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Users, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, X, ClipboardCheck, Repeat } from "lucide-react";
 import clsx from "clsx";
 import { useData } from "../hooks/useData";
 import {
   createClase,
   deleteClase,
   getAlumnos,
+  getAsistencias,
   getClases,
   inscribirAlumnoEnClase,
   removerAlumnoDeClase,
@@ -25,6 +26,8 @@ import {
   PageHeader,
 } from "../components/ui";
 import { ClaseModal } from "../components/ClaseModal";
+import { ListaModal } from "../components/ListaModal";
+import { RecuperacionModal } from "../components/RecuperacionModal";
 
 /** Lista de inscriptos de una clase con alta/baja rápida de alumnos. */
 function InscriptosDeClase({
@@ -129,10 +132,13 @@ function InscriptosDeClase({
 export default function Clases() {
   const { data: clases, loading, error, reload } = useData(getClases);
   const alumnos = useData(getAlumnos);
+  const asistencias = useData(getAsistencias);
   const [modal, setModal] = useState<{ abierto: boolean; clase: Clase | null }>({
     abierto: false,
     clase: null,
   });
+  const [claseLista, setClaseLista] = useState<Clase | null>(null);
+  const [claseRecuperacion, setClaseRecuperacion] = useState<Clase | null>(null);
   const [aEliminar, setAEliminar] = useState<Clase | null>(null);
 
   const guardar = async (input: Omit<Clase, "id" | "alumno_ids">) => {
@@ -152,8 +158,8 @@ export default function Clases() {
     reload();
   };
 
-  if (loading || alumnos.loading) return <LoadingState />;
-  const err = error || alumnos.error;
+  if (loading || alumnos.loading || asistencias.loading) return <LoadingState />;
+  const err = error || alumnos.error || asistencias.error;
   if (err) return <ErrorState message={err} />;
 
   const lista = clases ?? [];
@@ -232,6 +238,24 @@ export default function Clases() {
                           alumnos={alumnos.data ?? []}
                           onChange={reload}
                         />
+
+                        {/* Acciones de asistencia */}
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => setClaseLista(c)}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary/10 text-primary-dark px-3 py-2 text-sm font-bold hover:bg-primary/20 transition-colors"
+                          >
+                            <ClipboardCheck className="w-4 h-4" />
+                            Pasar Lista
+                          </button>
+                          <button
+                            onClick={() => setClaseRecuperacion(c)}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-bold text-muted-foreground hover:bg-muted transition-colors"
+                          >
+                            <Repeat className="w-4 h-4" />
+                            Recuperación
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -247,6 +271,26 @@ export default function Clases() {
           clase={modal.clase}
           onSave={guardar}
           onClose={() => setModal({ abierto: false, clase: null })}
+        />
+      )}
+
+      {claseLista && (
+        <ListaModal
+          clase={claseLista}
+          alumnos={alumnos.data ?? []}
+          asistencias={asistencias.data ?? []}
+          onClose={() => setClaseLista(null)}
+          onGuardado={asistencias.reload}
+        />
+      )}
+
+      {claseRecuperacion && (
+        <RecuperacionModal
+          clase={claseRecuperacion}
+          alumnos={alumnos.data ?? []}
+          asistencias={asistencias.data ?? []}
+          onClose={() => setClaseRecuperacion(null)}
+          onGuardado={asistencias.reload}
         />
       )}
 

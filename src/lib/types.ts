@@ -16,13 +16,25 @@ export interface Alumno {
   nombre: string;
   apellido: string;
   telefono: string;
-  email: string;
+  telefono_alt: string;
+  fecha_nacimiento: string | null; // YYYY-MM-DD
   direccion: string;
   fecha_alta: string; // YYYY-MM-DD
   asistencias_count: number;
   activo: boolean;
   /** Ids de planes asignados (tabla alumno_planes), cargados por la API. */
   plan_ids: string[];
+}
+
+/** Registro de asistencia de un alumno a una clase en una fecha concreta. */
+export interface Asistencia {
+  id: string;
+  clase_id: string;
+  alumno_id: string;
+  fecha: string; // YYYY-MM-DD
+  presente: boolean;
+  /** True cuando asiste usando una clase a favor (recuperación). */
+  es_recuperacion: boolean;
 }
 
 export type EstadoPago = "pendiente" | "completado";

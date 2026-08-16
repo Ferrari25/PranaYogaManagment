@@ -20,7 +20,8 @@ export function AlumnoModal({
     nombre: alumno?.nombre ?? "",
     apellido: alumno?.apellido ?? "",
     telefono: alumno?.telefono ?? "",
-    email: alumno?.email ?? "",
+    telefono_alt: alumno?.telefono_alt ?? "",
+    fecha_nacimiento: alumno?.fecha_nacimiento ?? null,
     direccion: alumno?.direccion ?? "",
     fecha_alta: alumno?.fecha_alta ?? hoyIso(),
     plan_ids: alumno?.plan_ids ?? [],
@@ -74,21 +75,30 @@ export function AlumnoModal({
           </Field>
         </div>
 
-        <Field label="Nro de Teléfono">
-          <Input
-            type="tel"
-            value={form.telefono}
-            onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-            placeholder="Ej: 11 5555 0001"
-          />
-        </Field>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Nro de Teléfono">
+            <Input
+              type="tel"
+              value={form.telefono}
+              onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+              placeholder="Ej: 11 5555 0001"
+            />
+          </Field>
+          <Field label="Teléfono Alternativo">
+            <Input
+              type="tel"
+              value={form.telefono_alt}
+              onChange={(e) => setForm({ ...form, telefono_alt: e.target.value })}
+              placeholder="Otro contacto (opcional)"
+            />
+          </Field>
+        </div>
 
-        <Field label="Correo Electrónico">
+        <Field label="Fecha de Nacimiento">
           <Input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder="ana@ejemplo.com"
+            type="date"
+            value={form.fecha_nacimiento ?? ""}
+            onChange={(e) => setForm({ ...form, fecha_nacimiento: e.target.value || null })}
           />
         </Field>
 

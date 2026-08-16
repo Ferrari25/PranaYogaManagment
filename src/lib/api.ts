@@ -5,6 +5,7 @@ import { supabase } from "./supabase";
 import { hoyIso, sumarMesesFecha } from "./format";
 import type {
   Alumno,
+  Asistencia,
   Clase,
   Pago,
   Plan,
@@ -69,7 +70,8 @@ export interface AlumnoInput {
   nombre: string;
   apellido: string;
   telefono: string;
-  email: string;
+  telefono_alt: string;
+  fecha_nacimiento: string | null;
   direccion: string;
   fecha_alta: string;
   plan_ids: string[];
@@ -136,11 +138,62 @@ export async function deleteAlumno(id: string): Promise<void> {
   check(null, error);
 }
 
-export async function registrarAsistencia(alumno: Alumno): Promise<void> {
+// ---------------------------------------------------------------------------
+// ASISTENCIAS Y RECUPERACIONES
+// ---------------------------------------------------------------------------
+export async function getAsistencias(): Promise<Asistencia[]> {
+  const { data, error } = await supabase
+    .from("asistencias")
+    .select("*")
+    .order("fecha", { ascending: false });
+  return check(data, error);
+}
+
+export interface MarcaAsistencia {
+  alumno_id: string;
+  presente: boolean;
+  es_recuperacion: boolean;
+}
+
+/**
+ * Guarda la lista de una clase para una fecha: crea o actualiza el registro
+ * de cada alumno (única fila por clase + alumno + fecha).
+ */
+export async function guardarLista(
+  claseId: string,
+  fecha: string,
+  marcas: MarcaAsistencia[]
+): Promise<void> {
+  if (marcas.length === 0) return;
+  const filas = marcas.map((m) => ({ ...m, clase_id: claseId, fecha }));
   const { error } = await supabase
-    .from("alumnos")
-    .update({ asistencias_count: alumno.asistencias_count + 1 })
-    .eq("id", alumno.id);
+    .from("asistencias")
+    .upsert(filas, { onConflict: "clase_id,alumno_id,fecha" });
+  check(null, error);
+}
+
+/**
+ * Anota una recuperación: el alumno usa 1 clase a favor para asistir a esta
+ * clase en esta fecha. El control del saldo se hace en la interfaz.
+ */
+export async function reservarRecuperacion(
+  claseId: string,
+  alumnoId: string,
+  fecha: string
+): Promise<void> {
+  const { error } = await supabase.from("asistencias").insert({
+    clase_id: claseId,
+    alumno_id: alumnoId,
+    fecha,
+    presente: true,
+    es_recuperacion: true,
+  });
+  check(null, error);
+}
+
+/** Elimina un registro de asistencia (deshacer una recuperación o un error). */
+export async function deleteAsistencia(id: string): Promise<void> {
+  const { error } = await supabase.from("asistencias").delete().eq("id", id);
   check(null, error);
 }
 

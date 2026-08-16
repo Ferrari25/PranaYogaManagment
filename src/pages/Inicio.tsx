@@ -1,9 +1,24 @@
-import { Users, CalendarDays, TrendingUp, Clock } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Users, CalendarDays, TrendingUp, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { getAlumnos, getClases, getPagos, sincronizarCuotas } from "../lib/api";
-import { formatFecha, formatHora, formatPrecio, hoyDiaSemana, nombreCompleto } from "../lib/format";
-import { Badge, ErrorState, LoadingState } from "../components/ui";
-import type { ReactNode } from "react";
+import {
+  formatFecha,
+  formatHora,
+  formatMes,
+  formatPrecio,
+  hoyDiaSemana,
+  mesActualIso,
+  nombreCompleto,
+  sumarMeses,
+} from "../lib/format";
+import type { Pago } from "../lib/types";
+import { Badge, Button, ErrorState, LoadingState } from "../components/ui";
+
+/** Mes al que corresponde la cuota de un pago. */
+function mesDelPago(p: Pago): string {
+  return p.mes_imputacion || p.fecha_pago.slice(0, 7);
+}
 
 function StatCard({
   icon,
@@ -33,6 +48,7 @@ export default function Inicio() {
   // Al abrir el panel se generan las cuotas de los ciclos que hayan vencido.
   const pagos = useData(() => sincronizarCuotas().then(getPagos));
   const clases = useData(getClases);
+  const [mes, setMes] = useState(mesActualIso());
 
   if (alumnos.loading || pagos.loading || clases.loading) return <LoadingState />;
   const error = alumnos.error || pagos.error || clases.error;
@@ -40,13 +56,14 @@ export default function Inicio() {
 
   const listaPagos = pagos.data ?? [];
   const listaAlumnos = alumnos.data ?? [];
-  const mesActual = new Date().toISOString().slice(0, 7);
 
+  // Métricas del mes seleccionado, por mes de cuota (mes_imputacion): la
+  // cuota de septiembre no aparece en "por cobrar" mientras mirás agosto.
   const ingresosMes = listaPagos
-    .filter((p) => p.estado === "completado" && p.fecha_pago.startsWith(mesActual))
+    .filter((p) => p.estado === "completado" && mesDelPago(p) === mes)
     .reduce((sum, p) => sum + Number(p.monto), 0);
 
-  const pendientes = listaPagos.filter((p) => p.estado === "pendiente");
+  const pendientes = listaPagos.filter((p) => p.estado === "pendiente" && mesDelPago(p) === mes);
   const totalPendiente = pendientes.reduce((sum, p) => sum + Number(p.monto), 0);
 
   const clasesHoy = (clases.data ?? []).filter((c) => c.dia_semana === hoyDiaSemana());
@@ -58,9 +75,21 @@ export default function Inicio() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Inicio</h1>
-        <p className="text-muted-foreground mt-1">Resumen general del estudio.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Inicio</h1>
+          <p className="text-muted-foreground mt-1">Resumen general del estudio.</p>
+        </div>
+        {/* Selector de mes para las métricas de cobros */}
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={() => setMes(sumarMeses(mes, -1))} aria-label="Mes anterior">
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <p className="text-xl font-bold font-serif min-w-44 text-center">{formatMes(mes)}</p>
+          <Button variant="outline" onClick={() => setMes(sumarMeses(mes, 1))} aria-label="Mes siguiente">
+            <ChevronRight className="w-5 h-5" />
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -79,13 +108,13 @@ export default function Inicio() {
           icon={<TrendingUp className="w-5 h-5" />}
           label="Ingresos del mes"
           value={formatPrecio(ingresosMes)}
-          detail="Pagos completados"
+          detail={`Cuotas de ${formatMes(mes)} cobradas`}
         />
         <StatCard
           icon={<Clock className="w-5 h-5" />}
           label="Por cobrar"
           value={formatPrecio(totalPendiente)}
-          detail={`${pendientes.length} pago(s) pendiente(s)`}
+          detail={`${pendientes.length} cuota(s) de ${formatMes(mes)}`}
         />
       </div>
 
@@ -115,11 +144,11 @@ export default function Inicio() {
           )}
         </section>
 
-        {/* Pagos pendientes */}
+        {/* Pagos pendientes del mes seleccionado */}
         <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-          <h2 className="text-xl font-bold mb-4">Pagos pendientes</h2>
+          <h2 className="text-xl font-bold mb-4">Pagos pendientes de {formatMes(mes)}</h2>
           {pendientes.length === 0 ? (
-            <p className="text-muted-foreground">No hay pagos pendientes. ¡Todo al día!</p>
+            <p className="text-muted-foreground">No hay pagos pendientes este mes. ¡Todo al día!</p>
           ) : (
             <ul className="space-y-3">
               {pendientes.slice(0, 6).map((p) => (

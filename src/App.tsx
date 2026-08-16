@@ -4,6 +4,7 @@ import RequireAuth from "./components/RequireAuth";
 import Inicio from "./pages/Inicio";
 import Clases from "./pages/Clases";
 import Alumnos from "./pages/Alumnos";
+import Asistencias from "./pages/Asistencias";
 import Pagos from "./pages/Pagos";
 import Planes from "./pages/Planes";
 import HistoricoMensual from "./pages/HistoricoMensual";
@@ -25,6 +26,7 @@ const router = createBrowserRouter([
           { index: true, Component: Inicio },
           { path: "clases", Component: Clases },
           { path: "alumnos", Component: Alumnos },
+          { path: "asistencias", Component: Asistencias },
           { path: "pagos", Component: Pagos },
           { path: "historico", Component: HistoricoMensual },
           { path: "planes", Component: Planes },

@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS alumnos (
   nombre            TEXT NOT NULL,
   apellido          TEXT NOT NULL DEFAULT '',
   telefono          TEXT NOT NULL DEFAULT '',
+  telefono_alt      TEXT NOT NULL DEFAULT '',
   email             TEXT NOT NULL DEFAULT '',
+  fecha_nacimiento  DATE,
   direccion         TEXT NOT NULL DEFAULT '',
   fecha_alta        DATE NOT NULL DEFAULT CURRENT_DATE,
   asistencias_count INTEGER NOT NULL DEFAULT 0,
@@ -133,6 +135,22 @@ CREATE TABLE IF NOT EXISTS turnos_terapias (
 );
 
 -- ----------------------------------------------------------------------------
+-- 10. ASISTENCIAS: registro por clase, alumno y fecha.
+--     presente al pasar lista; es_recuperacion cuando usa una clase a favor.
+--     Clases a favor = ausencias comunes - recuperaciones usadas.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS asistencias (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  clase_id        UUID NOT NULL REFERENCES clases(id) ON DELETE CASCADE,
+  alumno_id       UUID NOT NULL REFERENCES alumnos(id) ON DELETE CASCADE,
+  fecha           DATE NOT NULL,
+  presente        BOOLEAN NOT NULL DEFAULT TRUE,
+  es_recuperacion BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (clase_id, alumno_id, fecha)
+);
+
+-- ----------------------------------------------------------------------------
 -- Índices de rendimiento
 -- ----------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_pagos_alumno    ON pagos(alumno_id);
@@ -143,6 +161,8 @@ CREATE INDEX IF NOT EXISTS idx_reservas_clase  ON reservas(clase_id);
 CREATE INDEX IF NOT EXISTS idx_reservas_fecha  ON reservas(fecha_reserva);
 CREATE INDEX IF NOT EXISTS idx_alumnos_nombre  ON alumnos(nombre, apellido);
 CREATE INDEX IF NOT EXISTS idx_turnos_fecha    ON turnos_terapias(fecha);
+CREATE INDEX IF NOT EXISTS idx_asistencias_fecha  ON asistencias(fecha);
+CREATE INDEX IF NOT EXISTS idx_asistencias_alumno ON asistencias(alumno_id);
 
 -- ----------------------------------------------------------------------------
 -- Seguridad (RLS):
@@ -160,12 +180,13 @@ ALTER TABLE reservas           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clase_alumnos      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE servicios_terapias ENABLE ROW LEVEL SECURITY;
 ALTER TABLE turnos_terapias    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE asistencias        ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE t TEXT;
 BEGIN
   FOREACH t IN ARRAY ARRAY['planes', 'alumnos', 'alumno_planes', 'pagos', 'clases', 'reservas',
-                           'clase_alumnos', 'servicios_terapias', 'turnos_terapias'] LOOP
+                           'clase_alumnos', 'servicios_terapias', 'turnos_terapias', 'asistencias'] LOOP
     EXECUTE format('DROP POLICY IF EXISTS "acceso_anon_total" ON %I', t);
     EXECUTE format('DROP POLICY IF EXISTS "acceso_admin_total" ON %I', t);
     EXECUTE format(
@@ -181,14 +202,17 @@ CREATE POLICY "lectura_publica" ON clases FOR SELECT TO anon USING (true);
 DROP POLICY IF EXISTS "lectura_publica" ON clase_alumnos;
 CREATE POLICY "lectura_publica" ON clase_alumnos FOR SELECT TO anon USING (true);
 
--- Ocupación pública: solo clase y fecha de reservas confirmadas.
+-- Ocupación pública: reservas confirmadas + recuperaciones (ambas ocupan
+-- lugar), solo clase y fecha, sin datos personales.
 CREATE OR REPLACE FUNCTION public.ocupacion_reservas()
 RETURNS TABLE (clase_id UUID, fecha_reserva DATE)
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT clase_id, fecha_reserva FROM reservas WHERE estado = 'confirmada';
+  SELECT clase_id, fecha_reserva FROM reservas WHERE estado = 'confirmada'
+  UNION ALL
+  SELECT clase_id, fecha FROM asistencias WHERE es_recuperacion = TRUE;
 $$;
 
 -- Reserva pública: valida cupo real (alumnos fijos + reservas) e inserta.
@@ -219,6 +243,8 @@ BEGIN
   SELECT (SELECT count(*) FROM reservas
            WHERE clase_id = p_clase_id AND fecha_reserva = p_fecha AND estado = 'confirmada')
        + (SELECT count(*) FROM clase_alumnos WHERE clase_id = p_clase_id)
+       + (SELECT count(*) FROM asistencias
+           WHERE clase_id = p_clase_id AND fecha = p_fecha AND es_recuperacion = TRUE)
     INTO v_ocupados;
 
   IF v_ocupados >= v_cupo THEN
