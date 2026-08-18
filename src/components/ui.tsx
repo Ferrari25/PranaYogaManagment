@@ -214,16 +214,16 @@ export function Modal({
       aria-label={title}
     >
       <div
-        className="w-full max-w-lg rounded-2xl bg-card shadow-xl mt-8 mb-8"
+        className="w-full max-w-lg rounded-2xl bg-card shadow-xl mt-4 mb-8 sm:mt-8"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-2xl font-bold">{title}</h2>
-          <IconButton title="Cerrar" onClick={onClose} className="border-0">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-4 sm:px-6">
+          <h2 className="text-xl sm:text-2xl font-bold">{title}</h2>
+          <IconButton title="Cerrar" onClick={onClose} className="border-0 shrink-0">
             <X className="w-6 h-6" />
           </IconButton>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className="px-4 py-5 sm:px-6">{children}</div>
       </div>
     </div>
   );

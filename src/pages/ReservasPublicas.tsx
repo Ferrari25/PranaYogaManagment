@@ -1,12 +1,13 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Info } from "lucide-react";
 import clsx from "clsx";
 import { useData } from "../hooks/useData";
-import { createReserva, getClases, getOcupacionReservas } from "../lib/api";
+import { createReservaAlumno, getAlumnosParaReserva, getClases, getOcupacionReservas } from "../lib/api";
 import type { Clase } from "../lib/types";
 import { DIAS_SEMANA } from "../lib/types";
 import { formatFecha, formatHora } from "../lib/format";
-import { Badge, Button, ErrorState, Field, Input, LoadingState } from "../components/ui";
+import { tiposHabilitanClase } from "../lib/planes";
+import { Badge, Button, ErrorState, Field, Input, LoadingState, Select } from "../components/ui";
 import { Logo } from "../components/Logo";
 
 /** Próxima fecha (YYYY-MM-DD) en que cae el día de semana de la clase. */
@@ -32,31 +33,64 @@ function BadgeCupo({ libres }: { libres: number }) {
   return <Badge tone="success">Quedan {libres} lugares</Badge>;
 }
 
+/** Aviso fijo sobre el tipo de clase que puede reservar cada alumno. */
+function NotaPlan() {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl bg-warning-bg text-warning px-5 py-4 mb-6">
+      <Info className="w-6 h-6 shrink-0 mt-0.5" />
+      <p className="font-semibold">
+        Recordá que las reservas son únicamente para clases del mismo tipo y valor que tu plan. Si
+        no se cumple, el profesor podrá anular la reserva porque se eligió una clase fuera del
+        plan.
+      </p>
+    </div>
+  );
+}
+
 export default function ReservasPublicas() {
   const { data: clases, loading, error } = useData(getClases);
   const ocupacion = useData(getOcupacionReservas);
+  const alumnos = useData(getAlumnosParaReserva);
+
+  const [alumnoId, setAlumnoId] = useState("");
   const [claseId, setClaseId] = useState<string | null>(null);
-  const [nombre, setNombre] = useState("");
-  const [telefono, setTelefono] = useState("");
   const [fecha, setFecha] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
   const [confirmada, setConfirmada] = useState<{ clase: Clase; fecha: string } | null>(null);
 
+  const alumno = useMemo(
+    () => (alumnos.data ?? []).find((a) => a.id === alumnoId) ?? null,
+    [alumnos.data, alumnoId]
+  );
+
+  // Solo las clases que habilita el plan del alumno.
+  const clasesDelPlan = useMemo(() => {
+    if (!alumno) return [];
+    return (clases ?? []).filter((c) => tiposHabilitanClase(alumno.tipos, c));
+  }, [clases, alumno]);
+
   const claseElegida = useMemo(
-    () => (clases ?? []).find((c) => c.id === claseId) ?? null,
-    [clases, claseId]
+    () => clasesDelPlan.find((c) => c.id === claseId) ?? null,
+    [clasesDelPlan, claseId]
   );
 
   /** Lugares libres de una clase para una fecha concreta. */
   const lugaresLibres = (c: Clase, fechaIso: string): number => {
-    const reservados = (ocupacion.data ?? []).filter(
+    const ocupados = (ocupacion.data ?? []).filter(
       (r) => r.clase_id === c.id && r.fecha_reserva === fechaIso
     ).length;
-    return c.cupo_maximo - c.alumno_ids.length - reservados;
+    return c.cupo_maximo - c.alumno_ids.length - ocupados;
   };
 
   const libresFechaElegida = claseElegida ? lugaresLibres(claseElegida, fecha) : 0;
+
+  const elegirAlumno = (id: string) => {
+    setAlumnoId(id);
+    setClaseId(null);
+    setFecha("");
+    setErrorEnvio(null);
+  };
 
   const elegirClase = (c: Clase) => {
     setClaseId(c.id);
@@ -66,16 +100,11 @@ export default function ReservasPublicas() {
 
   const reservar = async (e: FormEvent) => {
     e.preventDefault();
-    if (!claseElegida) return;
+    if (!claseElegida || !alumno) return;
     setEnviando(true);
     setErrorEnvio(null);
     try {
-      await createReserva({
-        clase_id: claseElegida.id,
-        alumno_nombre: nombre.trim(),
-        alumno_telefono: telefono.trim(),
-        fecha_reserva: fecha,
-      });
+      await createReservaAlumno(claseElegida.id, alumno.id, fecha);
       setConfirmada({ clase: claseElegida, fecha });
       ocupacion.reload();
     } catch (err) {
@@ -117,8 +146,7 @@ export default function ReservasPublicas() {
               onClick={() => {
                 setConfirmada(null);
                 setClaseId(null);
-                setNombre("");
-                setTelefono("");
+                setFecha("");
               }}
             >
               Hacer otra reserva
@@ -128,86 +156,104 @@ export default function ReservasPublicas() {
           <>
             <h1 className="text-3xl font-bold">Reservá tu clase</h1>
             <p className="text-muted-foreground mt-1 mb-6">
-              Elegí una clase con lugar disponible y completá tus datos. ¡Es muy fácil!
+              Elegí tu nombre y la clase que querés reservar. ¡Es muy fácil!
             </p>
 
-            {(loading || ocupacion.loading) && <LoadingState />}
+            <NotaPlan />
+
+            {(loading || ocupacion.loading || alumnos.loading) && <LoadingState />}
             {error && <ErrorState message={error} />}
             {ocupacion.error && <ErrorState message={ocupacion.error} />}
+            {alumnos.error && <ErrorState message={alumnos.error} />}
 
-            {/* Paso 1: elegir clase (muestra el cupo de la próxima fecha) */}
-            {clases && ocupacion.data && (
-              <div className="space-y-3 mb-8">
-                {clases.length === 0 && (
-                  <p className="text-muted-foreground">Por el momento no hay clases disponibles.</p>
-                )}
-                {clases.map((c) => {
-                  const fechaCard = claseId === c.id && fecha ? fecha : proximaFecha(c.dia_semana);
-                  const libres = lugaresLibres(c, fechaCard);
-                  const completa = libres <= 0;
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => elegirClase(c)}
-                      disabled={completa}
-                      className={clsx(
-                        "w-full flex items-center justify-between gap-3 rounded-2xl border-2 px-5 py-4 text-left transition-colors",
-                        claseId === c.id
-                          ? "border-primary bg-primary/10"
-                          : completa
-                            ? "border-border bg-muted/60 opacity-70 cursor-not-allowed"
-                            : "border-border bg-card hover:bg-muted"
-                      )}
-                      aria-pressed={claseId === c.id}
-                    >
-                      <div>
-                        <p className="text-lg font-bold">{c.nombre}</p>
-                        <p className="text-muted-foreground">
-                          {c.dia_semana} · {formatHora(c.hora_inicio)} – {formatHora(c.hora_fin)} hs
-                          {c.instructor && ` · ${c.instructor}`}
-                        </p>
-                        <div className="mt-2">
-                          <BadgeCupo libres={libres} />
-                        </div>
-                      </div>
-                      <span
-                        className={clsx(
-                          "w-6 h-6 rounded-full border-2 shrink-0",
-                          claseId === c.id ? "border-primary bg-primary" : "border-border",
-                          completa && "opacity-40"
-                        )}
-                        aria-hidden="true"
-                      />
-                    </button>
-                  );
-                })}
+            {/* Paso 1: elegir alumno */}
+            {alumnos.data && (
+              <div className="mb-6">
+                <Field label="¿Quién sos?">
+                  <Select value={alumnoId} onChange={(e) => elegirAlumno(e.target.value)}>
+                    <option value="">Elegí tu nombre de la lista…</option>
+                    {alumnos.data.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {`${a.nombre} ${a.apellido}`.trim()}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Si no encontrás tu nombre, escribile al estudio para que te den de alta.
+                </p>
               </div>
             )}
 
-            {/* Paso 2: datos del cliente */}
+            {/* Paso 2: elegir clase (solo las de su plan) */}
+            {alumno && (
+              <div className="mb-8">
+                <h2 className="text-xl font-bold mb-1">Clases disponibles para tu plan</h2>
+                <p className="text-muted-foreground mb-3">
+                  {alumno.tipos.length > 0
+                    ? `Tu plan incluye: ${alumno.tipos.join(", ")}.`
+                    : "Todavía no tenés un plan asignado."}
+                </p>
+
+                {clasesDelPlan.length === 0 ? (
+                  <p className="rounded-xl bg-muted px-4 py-3 text-muted-foreground">
+                    No hay clases disponibles para tu plan. Consultá con el estudio.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {clasesDelPlan.map((c) => {
+                      const fechaCard = claseId === c.id && fecha ? fecha : proximaFecha(c.dia_semana);
+                      const libres = lugaresLibres(c, fechaCard);
+                      const completa = libres <= 0;
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => elegirClase(c)}
+                          disabled={completa}
+                          className={clsx(
+                            "w-full flex items-center justify-between gap-3 rounded-2xl border-2 px-5 py-4 text-left transition-colors",
+                            claseId === c.id
+                              ? "border-primary bg-primary/10"
+                              : completa
+                                ? "border-border bg-muted/60 opacity-70 cursor-not-allowed"
+                                : "border-border bg-card hover:bg-muted"
+                          )}
+                          aria-pressed={claseId === c.id}
+                        >
+                          <div>
+                            <p className="text-lg font-bold">{c.nombre}</p>
+                            <p className="text-muted-foreground">
+                              {c.dia_semana} · {formatHora(c.hora_inicio)} –{" "}
+                              {formatHora(c.hora_fin)} hs
+                              {c.instructor && ` · ${c.instructor}`}
+                            </p>
+                            <div className="mt-2">
+                              <BadgeCupo libres={libres} />
+                            </div>
+                          </div>
+                          <span
+                            className={clsx(
+                              "w-6 h-6 rounded-full border-2 shrink-0",
+                              claseId === c.id ? "border-primary bg-primary" : "border-border",
+                              completa && "opacity-40"
+                            )}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Paso 3: fecha y confirmación */}
             {claseElegida && (
               <form
                 onSubmit={reservar}
                 className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4"
               >
-                <h2 className="text-xl font-bold">Tus datos</h2>
-                <Field label="Nombre y apellido">
-                  <Input
-                    required
-                    value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
-                    placeholder="Ej: Ana García"
-                  />
-                </Field>
-                <Field label="Teléfono / WhatsApp">
-                  <Input
-                    type="tel"
-                    required
-                    value={telefono}
-                    onChange={(e) => setTelefono(e.target.value)}
-                    placeholder="Ej: 11 5555 0001"
-                  />
-                </Field>
+                <h2 className="text-xl font-bold">Confirmá tu reserva</h2>
                 <Field label={`Fecha (la clase es los días ${claseElegida.dia_semana})`}>
                   <Input
                     type="date"
@@ -217,7 +263,6 @@ export default function ReservasPublicas() {
                   />
                 </Field>
 
-                {/* Disponibilidad para la fecha elegida */}
                 {fecha && (
                   <p
                     className={clsx(

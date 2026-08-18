@@ -54,11 +54,13 @@ git push -u origin main
      el navegador: se inicia sesión una sola vez por dispositivo.
    - La página pública de reservas (`/book`) no requiere login.
 
-   > **Migraciones posteriores:** si tu base ya estaba creada, ejecutá también
+   > **Migraciones posteriores:** si tu base ya estaba creada, ejecutá en orden
    > [`supabase/migration-asistencias.sql`](supabase/migration-asistencias.sql)
    > (asistencias y recuperación de clases + fecha de nacimiento y teléfono
-   > alternativo en alumnos). Las instalaciones nuevas ya lo traen en
-   > `schema.sql`.
+   > alternativo en alumnos) y
+   > [`supabase/migration-reservas-alumnos.sql`](supabase/migration-reservas-alumnos.sql)
+   > (reservas atadas al alumno y validadas contra su plan). Las instalaciones
+   > nuevas ya traen todo en `schema.sql`.
    - Esto crea las 6 tablas (`planes`, `alumnos`, `alumno_planes`, `pagos`,
      `clases`, `reservas`), los índices, las políticas de acceso y carga los
      planes reales del estudio + alumnos de prueba.

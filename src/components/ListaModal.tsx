@@ -119,10 +119,12 @@ export function ListaModal({
               return (
                 <li
                   key={alumno.id}
-                  className="flex items-center justify-between gap-3 rounded-xl bg-muted/60 px-4 py-3"
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 rounded-xl bg-muted/60 px-3 py-3 sm:px-4"
                 >
                   <div className="min-w-0">
-                    <p className="font-semibold truncate">{nombreCompleto(alumno)}</p>
+                    <p className="font-semibold text-lg leading-tight break-words">
+                      {nombreCompleto(alumno)}
+                    </p>
                     {registro?.es_recuperacion && (
                       <div className="flex items-center gap-2 mt-0.5">
                         <Badge tone="primary">Recuperación</Badge>
@@ -142,7 +144,7 @@ export function ListaModal({
                       type="button"
                       onClick={() => setMarcas({ ...marcas, [alumno.id]: true })}
                       className={clsx(
-                        "inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 font-bold transition-colors",
+                        "flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-3 font-bold transition-colors",
                         presente
                           ? "bg-success text-white shadow-sm"
                           : "bg-card border-2 border-border text-muted-foreground hover:bg-muted"
@@ -155,7 +157,7 @@ export function ListaModal({
                       type="button"
                       onClick={() => setMarcas({ ...marcas, [alumno.id]: false })}
                       className={clsx(
-                        "inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 font-bold transition-colors",
+                        "flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-3 font-bold transition-colors",
                         !presente
                           ? "bg-danger text-white shadow-sm"
                           : "bg-card border-2 border-border text-muted-foreground hover:bg-muted"

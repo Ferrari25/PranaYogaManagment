@@ -22,13 +22,14 @@ reservas públicas. Reconstrucción limpia y minimalista de la app original.
 | `/planes` | Tarifas y tipos de membresía |
 | `/terapias` | Masajes & Reiki: servicios, turnos y cobros independientes |
 | `/reservas` | Vista admin de reservas + link público |
-| `/book` | **Página pública** para que los clientes reserven su cupo |
+| `/reservas-alumnos` | **Página pública** para que los alumnos reserven su cupo |
 
 El panel administrativo requiere iniciar sesión (usuario de Supabase Auth);
 la sesión persiste en el navegador, así que se ingresa una sola vez por
-dispositivo. La página pública `/book` no requiere login. La base de datos
-exige sesión para todo lo administrativo: el público solo puede ver la grilla
-de clases y crear reservas validadas.
+dispositivo. La página pública `/reservas-alumnos` no requiere login. La base
+de datos exige sesión para todo lo administrativo: el público solo puede ver
+la grilla de clases, la lista de nombres de alumnos y crear reservas validadas
+contra el plan del alumno.
 
 ## Desarrollo local
 

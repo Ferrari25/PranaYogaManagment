@@ -8,6 +8,7 @@ import {
   getAlumnos,
   getAsistencias,
   getClases,
+  getPlanes,
   inscribirAlumnoEnClase,
   removerAlumnoDeClase,
   updateClase,
@@ -133,6 +134,7 @@ export default function Clases() {
   const { data: clases, loading, error, reload } = useData(getClases);
   const alumnos = useData(getAlumnos);
   const asistencias = useData(getAsistencias);
+  const planes = useData(getPlanes);
   const [modal, setModal] = useState<{ abierto: boolean; clase: Clase | null }>({
     abierto: false,
     clase: null,
@@ -158,11 +160,17 @@ export default function Clases() {
     reload();
   };
 
-  if (loading || alumnos.loading || asistencias.loading) return <LoadingState />;
-  const err = error || alumnos.error || asistencias.error;
+  if (loading || alumnos.loading || asistencias.loading || planes.loading) {
+    return <LoadingState />;
+  }
+  const err = error || alumnos.error || asistencias.error || planes.error;
   if (err) return <ErrorState message={err} />;
 
   const lista = clases ?? [];
+  // Tipos ofrecidos al crear/editar una clase: los de los planes del estudio.
+  const tipos = [
+    ...new Set([...(planes.data ?? []).map((p) => p.tipo_clase), "Todos los tipos"]),
+  ];
   // Grilla semanal: días hábiles siempre visibles + fin de semana si tiene clases.
   const diasConClases = DIAS_SEMANA.filter(
     (d, i) => i < 5 || lista.some((c) => c.dia_semana === d)
@@ -208,11 +216,14 @@ export default function Clases() {
                     {delDia.map((c) => (
                       <li key={c.id} className="rounded-xl bg-muted/60 px-4 py-3">
                         <div className="flex items-start justify-between gap-2">
-                          <div>
+                          <div className="min-w-0">
                             <p className="font-semibold">{c.nombre}</p>
                             <p className="text-sm text-muted-foreground">
                               {formatHora(c.hora_inicio)} – {formatHora(c.hora_fin)} hs
                               {c.instructor && ` · ${c.instructor}`}
+                            </p>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              Tipo: <span className="font-semibold">{c.tipo_clase}</span>
                             </p>
                           </div>
                           <div className="flex gap-1.5">
@@ -269,6 +280,7 @@ export default function Clases() {
       {modal.abierto && (
         <ClaseModal
           clase={modal.clase}
+          tipos={tipos}
           onSave={guardar}
           onClose={() => setModal({ abierto: false, clase: null })}
         />

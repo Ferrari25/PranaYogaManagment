@@ -76,7 +76,7 @@ export default function Login() {
 
         {/* Los clientes que lleguen acá por error pueden ir a reservar */}
         <Link
-          to="/book"
+          to="/reservas-alumnos"
           className="mt-4 flex items-center justify-center gap-2 text-primary-dark font-semibold hover:underline"
         >
           <CalendarCheck className="w-5 h-5" />

@@ -80,11 +80,13 @@ export function sumarUnaHora(hora: string): string {
   return `${String((h + 1) % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/** Opciones de horario en formato 24 hs, cada 30 minutos (06:00 a 22:00). */
+/** Opciones de horario en formato 24 hs, cada 10 minutos (06:00 a 22:00). */
 export const HORARIOS_24HS: string[] = (() => {
   const out: string[] = [];
   for (let h = 6; h < 22; h++) {
-    out.push(`${String(h).padStart(2, "0")}:00`, `${String(h).padStart(2, "0")}:30`);
+    for (let m = 0; m < 60; m += 10) {
+      out.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    }
   }
   out.push("22:00");
   return out;

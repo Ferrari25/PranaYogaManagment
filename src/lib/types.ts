@@ -76,6 +76,8 @@ export type DiaSemana = (typeof DIAS_SEMANA)[number];
 export interface Clase {
   id: string;
   nombre: string;
+  /** Debe coincidir con el tipo_clase de los planes que habilitan esta clase. */
+  tipo_clase: string;
   instructor: string;
   dia_semana: DiaSemana;
   hora_inicio: string; // HH:MM (formato 24 hs)
@@ -91,6 +93,8 @@ export type EstadoReserva = "confirmada" | "cancelada";
 export interface Reserva {
   id: string;
   clase_id: string;
+  /** Alumno del estudio que reservó (null en reservas viejas con nombre libre). */
+  alumno_id: string | null;
   alumno_nombre: string;
   alumno_telefono: string;
   fecha_reserva: string; // YYYY-MM-DD

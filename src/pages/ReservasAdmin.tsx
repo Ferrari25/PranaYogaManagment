@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Copy, Check, XCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { cancelarReserva, getClases, getReservas } from "../lib/api";
+import { cancelarReserva, getAlumnos, getClases, getPlanes, getReservas } from "../lib/api";
 import { marcarReservasVistas } from "../lib/reservasNuevas";
 import type { Reserva } from "../lib/types";
 import { formatFecha, formatHora, whatsappUrl } from "../lib/format";
+import { tiposDelAlumno, tiposHabilitanClase } from "../lib/planes";
 import {
   Badge,
   Button,
@@ -31,6 +32,8 @@ const FILTROS_ESTADO: { valor: FiltroEstado; etiqueta: string }[] = [
 export default function ReservasAdmin() {
   const { data: reservas, loading, error, reload } = useData(getReservas);
   const clases = useData(getClases);
+  const alumnos = useData(getAlumnos);
+  const planes = useData(getPlanes);
   const [copiado, setCopiado] = useState(false);
   const [aCancelar, setACancelar] = useState<Reserva | null>(null);
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>("confirmada");
@@ -56,7 +59,7 @@ export default function ReservasAdmin() {
     return ordenada;
   }, [reservas, estadoFiltro, claseFiltro, orden]);
 
-  const urlPublica = `${window.location.origin}/book`;
+  const urlPublica = `${window.location.origin}/reservas-alumnos`;
 
   const copiarLink = async () => {
     await navigator.clipboard.writeText(urlPublica);
@@ -76,9 +79,18 @@ export default function ReservasAdmin() {
     reload();
   };
 
-  if (loading || clases.loading) return <LoadingState />;
-  const err = error || clases.error;
+  if (loading || clases.loading || alumnos.loading || planes.loading) return <LoadingState />;
+  const err = error || clases.error || alumnos.error || planes.error;
   if (err) return <ErrorState message={err} />;
+
+  /** True si la reserva quedó fuera del tipo de clase que cubre su plan. */
+  const fueraDePlan = (r: Reserva): boolean => {
+    if (!r.alumno_id) return false; // reserva vieja con nombre libre
+    const alumno = alumnos.data?.find((a) => a.id === r.alumno_id);
+    const clase = clases.data?.find((c) => c.id === r.clase_id);
+    if (!alumno || !clase) return false;
+    return !tiposHabilitanClase(tiposDelAlumno(alumno, planes.data ?? []), clase);
+  };
 
   return (
     <div>
@@ -91,7 +103,7 @@ export default function ReservasAdmin() {
               {copiado ? <Check className="w-5 h-5 text-success" /> : <Copy className="w-5 h-5" />}
               {copiado ? "¡Link copiado!" : "Copiar link público"}
             </Button>
-            <Button onClick={() => window.open("/book", "_blank")}>
+            <Button onClick={() => window.open("/reservas-alumnos", "_blank")}>
               <ExternalLink className="w-5 h-5" />
               Abrir página de reservas
             </Button>
@@ -129,7 +141,14 @@ export default function ReservasAdmin() {
         <Table headers={["Cliente", "Contacto", "Clase", "Fecha", "Estado", "Acciones"]}>
           {filtradas.map((r) => (
             <tr key={r.id} className="hover:bg-muted/40">
-              <td className="px-5 py-4 font-semibold">{r.alumno_nombre}</td>
+              <td className="px-5 py-4">
+                <p className="font-semibold">{r.alumno_nombre}</p>
+                {fueraDePlan(r) && (
+                  <p className="mt-1">
+                    <Badge tone="danger">Fuera de su plan</Badge>
+                  </p>
+                )}
+              </td>
               <td className="px-5 py-4">
                 {r.alumno_telefono ? (
                   <a
@@ -173,7 +192,11 @@ export default function ReservasAdmin() {
       {aCancelar && (
         <ConfirmDialog
           title="Cancelar reserva"
-          message={`¿Seguro que querés cancelar la reserva de ${aCancelar.alumno_nombre}?`}
+          message={
+            fueraDePlan(aCancelar)
+              ? `${aCancelar.alumno_nombre} eligió una clase fuera de su plan. ¿Anular la reserva por ese motivo?`
+              : `¿Seguro que querés cancelar la reserva de ${aCancelar.alumno_nombre}?`
+          }
           confirmLabel="Sí, cancelar"
           onConfirm={cancelar}
           onCancel={() => setACancelar(null)}

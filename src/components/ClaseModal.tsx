@@ -10,15 +10,19 @@ type ClaseForm = Omit<Clase, "id" | "alumno_ids" | "hora_fin">;
 
 export function ClaseModal({
   clase,
+  tipos,
   onSave,
   onClose,
 }: {
   clase: Clase | null; // null = crear nueva clase
+  /** Tipos de clase disponibles, tomados de los planes del estudio. */
+  tipos: string[];
   onSave: (input: Omit<Clase, "id" | "alumno_ids">) => Promise<void>;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<ClaseForm>({
     nombre: clase?.nombre ?? "",
+    tipo_clase: clase?.tipo_clase ?? tipos[0] ?? "Todos los tipos",
     instructor: clase?.instructor ?? "",
     dia_semana: clase?.dia_semana ?? "Lunes",
     hora_inicio: formatHora(clase?.hora_inicio ?? "09:00"),
@@ -56,6 +60,26 @@ export function ClaseModal({
             placeholder="Ej: Hatha Yoga"
           />
         </Field>
+
+        <Field label="Tipo de Clase">
+          <Select
+            value={form.tipo_clase}
+            onChange={(e) => setForm({ ...form, tipo_clase: e.target.value })}
+          >
+            {/* Conserva un tipo viejo que ya no exista entre los planes */}
+            {!tipos.includes(form.tipo_clase) && (
+              <option value={form.tipo_clase}>{form.tipo_clase}</option>
+            )}
+            {tipos.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <p className="-mt-2 text-sm text-muted-foreground">
+          Define qué planes pueden reservar esta clase. Los tipos salen de los planes del estudio.
+        </p>
 
         <Field label="Instructor/a">
           <Input

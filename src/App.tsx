@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from "react-router";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import AdminLayout from "./layouts/AdminLayout";
 import RequireAuth from "./components/RequireAuth";
 import Inicio from "./pages/Inicio";
@@ -14,8 +14,10 @@ import ReservasPublicas from "./pages/ReservasPublicas";
 import { isSupabaseConfigured } from "./lib/supabase";
 
 const router = createBrowserRouter([
-  // Vista pública para clientes: sin login y sin sidebar de administración
-  { path: "/book", Component: ReservasPublicas },
+  // Vista pública para alumnos: sin login y sin sidebar de administración
+  { path: "/reservas-alumnos", Component: ReservasPublicas },
+  // Los links viejos siguen funcionando
+  { path: "/book", element: <Navigate to="/reservas-alumnos" replace /> },
   {
     path: "/",
     Component: RequireAuth, // todo lo administrativo exige sesión iniciada

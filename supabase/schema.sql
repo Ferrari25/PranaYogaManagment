@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS pagos (
 CREATE TABLE IF NOT EXISTS clases (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nombre      TEXT NOT NULL,
+  -- Debe coincidir con el tipo_clase de los planes que la habilitan
+  tipo_clase  TEXT NOT NULL DEFAULT 'Todos los tipos',
   instructor  TEXT NOT NULL DEFAULT '',
   dia_semana  TEXT NOT NULL DEFAULT 'Lunes'
               CHECK (dia_semana IN ('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo')),
@@ -88,6 +90,7 @@ CREATE TABLE IF NOT EXISTS clases (
 CREATE TABLE IF NOT EXISTS reservas (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   clase_id        UUID NOT NULL REFERENCES clases(id) ON DELETE CASCADE,
+  alumno_id       UUID REFERENCES alumnos(id) ON DELETE SET NULL,
   alumno_nombre   TEXT NOT NULL,
   alumno_telefono TEXT NOT NULL DEFAULT '',
   fecha_reserva   DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -159,6 +162,7 @@ CREATE INDEX IF NOT EXISTS idx_pagos_fecha     ON pagos(fecha_pago);
 CREATE INDEX IF NOT EXISTS idx_pagos_mes       ON pagos(mes_imputacion);
 CREATE INDEX IF NOT EXISTS idx_reservas_clase  ON reservas(clase_id);
 CREATE INDEX IF NOT EXISTS idx_reservas_fecha  ON reservas(fecha_reserva);
+CREATE INDEX IF NOT EXISTS idx_reservas_alumno ON reservas(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_alumnos_nombre  ON alumnos(nombre, apellido);
 CREATE INDEX IF NOT EXISTS idx_turnos_fecha    ON turnos_terapias(fecha);
 CREATE INDEX IF NOT EXISTS idx_asistencias_fecha  ON asistencias(fecha);
@@ -215,12 +219,44 @@ AS $$
   SELECT clase_id, fecha FROM asistencias WHERE es_recuperacion = TRUE;
 $$;
 
--- Reserva pública: valida cupo real (alumnos fijos + reservas) e inserta.
-CREATE OR REPLACE FUNCTION public.crear_reserva(
-  p_clase_id UUID,
-  p_nombre   TEXT,
-  p_telefono TEXT,
-  p_fecha    DATE
+-- Comparación de tipos tolerante a mayúsculas y espacios.
+CREATE OR REPLACE FUNCTION public.normalizar_tipo(t TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT btrim(regexp_replace(lower(coalesce(t, '')), '\s+', ' ', 'g'));
+$$;
+
+-- Lista pública de alumnos para el selector de reservas: solo nombre y los
+-- tipos de clase que habilita su plan. Nunca teléfono ni datos de pago.
+CREATE OR REPLACE FUNCTION public.alumnos_para_reserva()
+RETURNS TABLE (id UUID, nombre TEXT, apellido TEXT, tipos TEXT[])
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    a.id,
+    a.nombre,
+    a.apellido,
+    COALESCE(
+      array_agg(DISTINCT p.tipo_clase) FILTER (WHERE p.tipo_clase IS NOT NULL),
+      ARRAY[]::TEXT[]
+    ) AS tipos
+  FROM alumnos a
+  LEFT JOIN alumno_planes ap ON ap.alumno_id = a.id
+  LEFT JOIN planes p         ON p.id = ap.plan_id AND p.activo
+  WHERE a.activo
+  GROUP BY a.id, a.nombre, a.apellido
+  ORDER BY a.nombre, a.apellido;
+$$;
+
+-- Reserva de un alumno del estudio: valida plan y cupo real en el servidor.
+CREATE OR REPLACE FUNCTION public.crear_reserva_alumno(
+  p_clase_id  UUID,
+  p_alumno_id UUID,
+  p_fecha     DATE
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -228,16 +264,45 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_cupo     INTEGER;
-  v_ocupados INTEGER;
+  v_alumno    RECORD;
+  v_clase     RECORD;
+  v_permitido BOOLEAN;
+  v_ocupados  INTEGER;
 BEGIN
-  IF trim(coalesce(p_nombre, '')) = '' THEN
-    RAISE EXCEPTION 'El nombre es obligatorio.';
+  SELECT id, nombre, apellido, telefono INTO v_alumno
+  FROM alumnos WHERE id = p_alumno_id AND activo;
+  IF v_alumno.id IS NULL THEN
+    RAISE EXCEPTION 'El alumno no existe o no está activo.';
   END IF;
 
-  SELECT cupo_maximo INTO v_cupo FROM clases WHERE id = p_clase_id;
-  IF v_cupo IS NULL THEN
+  SELECT id, cupo_maximo, tipo_clase INTO v_clase FROM clases WHERE id = p_clase_id;
+  IF v_clase.id IS NULL THEN
     RAISE EXCEPTION 'La clase no existe.';
+  END IF;
+
+  SELECT normalizar_tipo(v_clase.tipo_clase) = 'todos los tipos'
+      OR EXISTS (
+           SELECT 1
+           FROM alumno_planes ap
+           JOIN planes p ON p.id = ap.plan_id AND p.activo
+           WHERE ap.alumno_id = p_alumno_id
+             AND (
+               normalizar_tipo(p.tipo_clase) = 'todos los tipos'
+               OR normalizar_tipo(p.tipo_clase) = normalizar_tipo(v_clase.tipo_clase)
+             )
+         )
+    INTO v_permitido;
+
+  IF NOT v_permitido THEN
+    RAISE EXCEPTION 'Esta clase no corresponde al plan del alumno.';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM reservas
+    WHERE clase_id = p_clase_id AND alumno_id = p_alumno_id
+      AND fecha_reserva = p_fecha AND estado = 'confirmada'
+  ) THEN
+    RAISE EXCEPTION 'Ya tenés una reserva para esta clase en esa fecha.';
   END IF;
 
   SELECT (SELECT count(*) FROM reservas
@@ -247,12 +312,19 @@ BEGIN
            WHERE clase_id = p_clase_id AND fecha = p_fecha AND es_recuperacion = TRUE)
     INTO v_ocupados;
 
-  IF v_ocupados >= v_cupo THEN
+  IF v_ocupados >= v_clase.cupo_maximo THEN
     RAISE EXCEPTION 'La clase ya no tiene cupo disponible para esa fecha.';
   END IF;
 
-  INSERT INTO reservas (clase_id, alumno_nombre, alumno_telefono, fecha_reserva, estado)
-  VALUES (p_clase_id, trim(p_nombre), trim(coalesce(p_telefono, '')), p_fecha, 'confirmada');
+  INSERT INTO reservas (clase_id, alumno_id, alumno_nombre, alumno_telefono, fecha_reserva, estado)
+  VALUES (
+    p_clase_id,
+    p_alumno_id,
+    btrim(v_alumno.nombre || ' ' || coalesce(v_alumno.apellido, '')),
+    coalesce(v_alumno.telefono, ''),
+    p_fecha,
+    'confirmada'
+  );
 END;
 $$;
 
@@ -272,14 +344,14 @@ SELECT * FROM (VALUES
 WHERE NOT EXISTS (SELECT 1 FROM planes);
 
 -- Clases de la grilla semanal (solo si la tabla está vacía)
-INSERT INTO clases (nombre, instructor, dia_semana, hora_inicio, hora_fin, cupo_maximo)
+INSERT INTO clases (nombre, tipo_clase, instructor, dia_semana, hora_inicio, hora_fin, cupo_maximo)
 SELECT * FROM (VALUES
-  ('Hatha Yoga',    'María',  'Lunes',     '09:00'::time, '10:15'::time, 12),
-  ('Vinyasa Flow',  'María',  'Martes',    '18:30'::time, '19:45'::time, 12),
-  ('Hatha Yoga',    'María',  'Miércoles', '09:00'::time, '10:15'::time, 12),
-  ('Yoga Kuruntas', 'Laura',  'Jueves',    '10:30'::time, '11:45'::time,  8),
-  ('Vinyasa Flow',  'María',  'Viernes',   '18:30'::time, '19:45'::time, 12)
-) AS v(nombre, instructor, dia_semana, hora_inicio, hora_fin, cupo_maximo)
+  ('Hatha Yoga',    'Hatha / Vinyasa', 'María', 'Lunes',     '09:00'::time, '10:00'::time, 12),
+  ('Vinyasa Flow',  'Hatha / Vinyasa', 'María', 'Martes',    '18:30'::time, '19:30'::time, 12),
+  ('Hatha Yoga',    'Hatha / Vinyasa', 'María', 'Miércoles', '09:00'::time, '10:00'::time, 12),
+  ('Yoga Kuruntas', 'Kuruntas',        'Laura', 'Jueves',    '10:30'::time, '11:30'::time,  8),
+  ('Vinyasa Flow',  'Hatha / Vinyasa', 'María', 'Viernes',   '18:30'::time, '19:30'::time, 12)
+) AS v(nombre, tipo_clase, instructor, dia_semana, hora_inicio, hora_fin, cupo_maximo)
 WHERE NOT EXISTS (SELECT 1 FROM clases);
 
 -- Servicios iniciales de Masajes & Reiki (solo si la tabla está vacía)

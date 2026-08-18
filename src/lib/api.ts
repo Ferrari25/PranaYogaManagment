@@ -387,18 +387,33 @@ export async function getOcupacionReservas(): Promise<OcupacionReserva[]> {
   return check(data, error);
 }
 
+/** Alumno tal como lo ve la página pública: nombre y tipos de clase de su plan. */
+export interface AlumnoParaReserva {
+  id: string;
+  nombre: string;
+  apellido: string;
+  tipos: string[];
+}
+
+export async function getAlumnosParaReserva(): Promise<AlumnoParaReserva[]> {
+  const { data, error } = await supabase.rpc("alumnos_para_reserva");
+  return check(data, error);
+}
+
 /**
- * Crea una reserva pública mediante la función segura `crear_reserva`, que
- * valida el cupo real en el servidor (alumnos fijos + reservas confirmadas).
+ * Reserva de un alumno del estudio mediante la función segura
+ * `crear_reserva_alumno`, que valida en el servidor que la clase corresponda
+ * al plan del alumno y que haya cupo real.
  */
-export async function createReserva(
-  input: Omit<Reserva, "id" | "estado" | "created_at">
+export async function createReservaAlumno(
+  claseId: string,
+  alumnoId: string,
+  fecha: string
 ): Promise<void> {
-  const { error } = await supabase.rpc("crear_reserva", {
-    p_clase_id: input.clase_id,
-    p_nombre: input.alumno_nombre,
-    p_telefono: input.alumno_telefono,
-    p_fecha: input.fecha_reserva,
+  const { error } = await supabase.rpc("crear_reserva_alumno", {
+    p_clase_id: claseId,
+    p_alumno_id: alumnoId,
+    p_fecha: fecha,
   });
   check(null, error);
 }
