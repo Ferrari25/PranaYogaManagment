@@ -1,21 +1,26 @@
-// Correspondencia entre el tipo de clase y el tipo que habilita cada plan.
-// Ambos lados guardan el tipo de forma explícita (clases.tipo_clase y
-// planes.tipo_clase): la comparación es exacta salvo mayúsculas, acentos y
-// espacios, para no caer en adivinanzas por palabras sueltas.
+// Correspondencia entre el tipo de una clase y el tipo que habilita cada plan.
+//
+// Los dos lados pueden nombrar VARIOS tipos separados por "/", "&", "+", ","
+// o " y ": una clase "Hatha / Vinyasa" sirve para quien tenga plan "Hatha", y
+// un plan "Hatha & Kuruntas" habilita las clases de ambos tipos. Por eso cada
+// lado se convierte en una lista y alcanza con que compartan un tipo.
 
 import type { Alumno, Clase, Plan } from "./types";
 
 export const TIPO_TODOS = "todos los tipos";
 
 const ACENTOS = /[̀-ͯ]/g;
+const SEPARADORES = /[/&+,]|\sy\s/;
 
-export function normalizarTipo(tipo: string): string {
+/** Lista de tipos que nombra un texto, normalizados (sin acentos ni mayúsculas). */
+export function tokensDeTipo(tipo: string): string[] {
   return tipo
-    .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(ACENTOS, "")
-    .replace(/\s+/g, " ");
+    .split(SEPARADORES)
+    .map((t) => t.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
 }
 
 /** Tipos de clase que habilitan los planes asignados al alumno. */
@@ -29,10 +34,12 @@ export function tiposDelAlumno(alumno: Alumno, planes: Plan[]): string[] {
 
 /** True si esos tipos de plan habilitan la clase indicada. */
 export function tiposHabilitanClase(tipos: string[], clase: Clase): boolean {
-  const tipoClase = normalizarTipo(clase.tipo_clase);
-  if (tipoClase === TIPO_TODOS) return true;
+  const deClase = tokensDeTipo(clase.tipo_clase);
+  if (deClase.includes(TIPO_TODOS)) return true;
+
   return tipos.some((t) => {
-    const tipoPlan = normalizarTipo(t);
-    return tipoPlan === TIPO_TODOS || tipoPlan === tipoClase;
+    const delPlan = tokensDeTipo(t);
+    if (delPlan.includes(TIPO_TODOS)) return true;
+    return delPlan.some((tipo) => deClase.includes(tipo));
   });
 }

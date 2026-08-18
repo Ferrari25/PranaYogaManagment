@@ -32,14 +32,29 @@ ALTER TABLE reservas ADD COLUMN IF NOT EXISTS alumno_id UUID REFERENCES alumnos(
 CREATE INDEX IF NOT EXISTS idx_reservas_alumno ON reservas(alumno_id);
 
 -- ----------------------------------------------------------------------------
--- 3. Comparación de tipos tolerante a mayúsculas, acentos y espacios.
+-- 3. Tipos como lista: un texto puede nombrar varios tipos separados por
+--    "/", "&", "+", "," o " y ". Así "Hatha / Vinyasa" sirve para un plan
+--    "Hatha", y un plan "Hatha & Kuruntas" habilita las clases de ambos.
+--    Ignora mayúsculas, acentos y espacios de más.
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.normalizar_tipo(t TEXT)
-RETURNS TEXT
+CREATE OR REPLACE FUNCTION public.tokens_tipo(t TEXT)
+RETURNS TEXT[]
 LANGUAGE sql
 IMMUTABLE
 AS $$
-  SELECT btrim(regexp_replace(lower(coalesce(t, '')), '\s+', ' ', 'g'));
+  SELECT COALESCE(
+    ARRAY(
+      SELECT btrim(regexp_replace(x, '\s+', ' ', 'g'))
+      FROM unnest(
+        regexp_split_to_array(
+          translate(lower(coalesce(t, '')), 'áéíóúü', 'aeiouu'),
+          '[/&+,]|\sy\s'
+        )
+      ) AS x
+      WHERE btrim(x) <> ''
+    ),
+    ARRAY[]::TEXT[]
+  );
 $$;
 
 -- ----------------------------------------------------------------------------
@@ -100,16 +115,16 @@ BEGIN
   END IF;
 
   -- El alumno puede reservar si la clase es abierta a todos los tipos, o si
-  -- alguno de sus planes cubre ese mismo tipo de clase.
-  SELECT normalizar_tipo(v_clase.tipo_clase) = 'todos los tipos'
+  -- alguno de sus planes comparte al menos un tipo con la clase.
+  SELECT 'todos los tipos' = ANY(tokens_tipo(v_clase.tipo_clase))
       OR EXISTS (
            SELECT 1
            FROM alumno_planes ap
            JOIN planes p ON p.id = ap.plan_id AND p.activo
            WHERE ap.alumno_id = p_alumno_id
              AND (
-               normalizar_tipo(p.tipo_clase) = 'todos los tipos'
-               OR normalizar_tipo(p.tipo_clase) = normalizar_tipo(v_clase.tipo_clase)
+               'todos los tipos' = ANY(tokens_tipo(p.tipo_clase))
+               OR tokens_tipo(p.tipo_clase) && tokens_tipo(v_clase.tipo_clase)
              )
          )
     INTO v_permitido;
@@ -155,3 +170,6 @@ $$;
 --    cargar reservas de personas que no son alumnas del estudio.
 -- ----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.crear_reserva(UUID, TEXT, TEXT, DATE);
+
+-- Reemplazada por tokens_tipo (comparación por lista de tipos).
+DROP FUNCTION IF EXISTS public.normalizar_tipo(TEXT);

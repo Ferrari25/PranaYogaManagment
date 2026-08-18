@@ -219,13 +219,27 @@ AS $$
   SELECT clase_id, fecha FROM asistencias WHERE es_recuperacion = TRUE;
 $$;
 
--- Comparación de tipos tolerante a mayúsculas y espacios.
-CREATE OR REPLACE FUNCTION public.normalizar_tipo(t TEXT)
-RETURNS TEXT
+-- Tipos como lista: un texto puede nombrar varios tipos separados por "/",
+-- "&", "+", "," o " y ". Así "Hatha / Vinyasa" sirve para un plan "Hatha" y
+-- un plan "Hatha & Kuruntas" habilita las clases de ambos tipos.
+CREATE OR REPLACE FUNCTION public.tokens_tipo(t TEXT)
+RETURNS TEXT[]
 LANGUAGE sql
 IMMUTABLE
 AS $$
-  SELECT btrim(regexp_replace(lower(coalesce(t, '')), '\s+', ' ', 'g'));
+  SELECT COALESCE(
+    ARRAY(
+      SELECT btrim(regexp_replace(x, '\s+', ' ', 'g'))
+      FROM unnest(
+        regexp_split_to_array(
+          translate(lower(coalesce(t, '')), 'áéíóúü', 'aeiouu'),
+          '[/&+,]|\sy\s'
+        )
+      ) AS x
+      WHERE btrim(x) <> ''
+    ),
+    ARRAY[]::TEXT[]
+  );
 $$;
 
 -- Lista pública de alumnos para el selector de reservas: solo nombre y los
@@ -280,15 +294,15 @@ BEGIN
     RAISE EXCEPTION 'La clase no existe.';
   END IF;
 
-  SELECT normalizar_tipo(v_clase.tipo_clase) = 'todos los tipos'
+  SELECT 'todos los tipos' = ANY(tokens_tipo(v_clase.tipo_clase))
       OR EXISTS (
            SELECT 1
            FROM alumno_planes ap
            JOIN planes p ON p.id = ap.plan_id AND p.activo
            WHERE ap.alumno_id = p_alumno_id
              AND (
-               normalizar_tipo(p.tipo_clase) = 'todos los tipos'
-               OR normalizar_tipo(p.tipo_clase) = normalizar_tipo(v_clase.tipo_clase)
+               'todos los tipos' = ANY(tokens_tipo(p.tipo_clase))
+               OR tokens_tipo(p.tipo_clase) && tokens_tipo(v_clase.tipo_clase)
              )
          )
     INTO v_permitido;

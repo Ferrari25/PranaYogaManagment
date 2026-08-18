@@ -64,10 +64,20 @@ export default function ReservasPublicas() {
     [alumnos.data, alumnoId]
   );
 
-  // Solo las clases que habilita el plan del alumno.
+  // Solo las clases que habilita el plan del alumno, ordenadas por la fecha
+  // en que realmente le tocaría reservar (hoy primero, después mañana, etc.),
+  // y por horario dentro de un mismo día.
   const clasesDelPlan = useMemo(() => {
     if (!alumno) return [];
-    return (clases ?? []).filter((c) => tiposHabilitanClase(alumno.tipos, c));
+    return (clases ?? [])
+      .filter((c) => tiposHabilitanClase(alumno.tipos, c))
+      .sort((a, b) => {
+        const fechaA = proximaFecha(a.dia_semana);
+        const fechaB = proximaFecha(b.dia_semana);
+        return fechaA !== fechaB
+          ? fechaA.localeCompare(fechaB)
+          : a.hora_inicio.localeCompare(b.hora_inicio);
+      });
   }, [clases, alumno]);
 
   const claseElegida = useMemo(
@@ -223,8 +233,8 @@ export default function ReservasPublicas() {
                           <div>
                             <p className="text-lg font-bold">{c.nombre}</p>
                             <p className="text-muted-foreground">
-                              {c.dia_semana} · {formatHora(c.hora_inicio)} –{" "}
-                              {formatHora(c.hora_fin)} hs
+                              {c.dia_semana} {formatFecha(fechaCard)} ·{" "}
+                              {formatHora(c.hora_inicio)} – {formatHora(c.hora_fin)} hs
                               {c.instructor && ` · ${c.instructor}`}
                             </p>
                             <div className="mt-2">
