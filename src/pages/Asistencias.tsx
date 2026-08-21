@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { useData } from "../hooks/useData";
-import { getAlumnos, getAsistencias, getPlanes } from "../lib/api";
+import { getAlumnos, getAsistencias, getPlanes, getReservas } from "../lib/api";
 import { formatMes, mesActualIso, nombreCompleto, sumarMeses } from "../lib/format";
 import { clasesAFavor, cupoMensual, usadasEnMes } from "../lib/asistencias";
 import { Badge, Button, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/ui";
@@ -30,15 +30,19 @@ export default function Asistencias() {
   const alumnos = useData(getAlumnos);
   const planes = useData(getPlanes);
   const asistencias = useData(getAsistencias);
+  const reservas = useData(getReservas);
   const [mes, setMes] = useState(mesActualIso());
 
   const dias = useMemo(() => diasHabiles(mes), [mes]);
 
-  if (alumnos.loading || planes.loading || asistencias.loading) return <LoadingState />;
-  const err = alumnos.error || planes.error || asistencias.error;
+  if (alumnos.loading || planes.loading || asistencias.loading || reservas.loading) {
+    return <LoadingState />;
+  }
+  const err = alumnos.error || planes.error || asistencias.error || reservas.error;
   if (err) return <ErrorState message={err} />;
 
   const listaAsistencias = asistencias.data ?? [];
+  const listaReservas = reservas.data ?? [];
   const conPlan = (alumnos.data ?? []).filter((a) => a.plan_ids.length > 0);
 
   /** Marcas del alumno para una fecha (puede tener más de una clase ese día). */
@@ -108,7 +112,7 @@ export default function Asistencias() {
             </thead>
             <tbody className="divide-y divide-border">
               {conPlan.map((a) => {
-                const usadas = usadasEnMes(a.id, listaAsistencias, mes);
+                const usadas = usadasEnMes(a.id, listaAsistencias, listaReservas, mes);
                 const cupo = cupoMensual(a, planes.data ?? []);
                 const aFavor = clasesAFavor(a.id, listaAsistencias);
                 return (
@@ -165,7 +169,8 @@ export default function Asistencias() {
 
       <p className="text-sm text-muted-foreground mt-3">
         El cupo mensual se calcula según los planes del alumno: días por semana × 4. Las
-        recuperaciones también cuentan como clases usadas.
+        recuperaciones cuentan como clases usadas, y reservar una clase también resta 1 apenas se
+        reserva (haya asistido o no). Si el profesor cancela esa reserva, se devuelve sola.
       </p>
     </div>
   );

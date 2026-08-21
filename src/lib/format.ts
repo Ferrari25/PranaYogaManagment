@@ -30,6 +30,15 @@ export function formatHora(hora: string): string {
   return hora ? hora.slice(0, 5) : "";
 }
 
+/** Formatea un timestamp ISO (con hora) como "DD/MM/YYYY · HH:MM". */
+export function formatFechaHora(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const fecha = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+  const hora = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return `${fecha} · ${hora}`;
+}
+
 /** Link directo a WhatsApp a partir de un teléfono argentino, con mensaje opcional. */
 export function whatsappUrl(telefono: string, mensaje?: string): string {
   const digits = telefono.replace(/\D/g, "");

@@ -4,8 +4,9 @@ import { useData } from "../hooks/useData";
 import { cancelarReserva, getAlumnos, getClases, getPlanes, getReservas } from "../lib/api";
 import { marcarReservasVistas } from "../lib/reservasNuevas";
 import type { Reserva } from "../lib/types";
-import { formatFecha, formatHora, whatsappUrl } from "../lib/format";
+import { formatFecha, formatFechaHora, formatHora, whatsappUrl } from "../lib/format";
 import { tiposDelAlumno, tiposHabilitanClase } from "../lib/planes";
+import { claseSiguiente } from "../lib/proximaClase";
 import {
   Badge,
   Button,
@@ -39,11 +40,36 @@ export default function ReservasAdmin() {
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>("confirmada");
   const [claseFiltro, setClaseFiltro] = useState("todas");
   const [orden, setOrden] = useState<Orden>("recientes");
+  const [ahora, setAhora] = useState(() => new Date());
 
   // Al entrar a esta pantalla, el aviso de reservas nuevas del sidebar se limpia.
   useEffect(() => {
     if (!loading) marcarReservasVistas();
   }, [loading]);
+
+  // Recalcula "la próxima clase" solo mirando el reloj: a los 10 minutos de
+  // empezada, salta sola a la siguiente sin que haga falta recargar la página.
+  useEffect(() => {
+    const id = setInterval(() => setAhora(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const siguiente = useMemo(
+    () => claseSiguiente(clases.data ?? [], ahora),
+    [clases.data, ahora]
+  );
+
+  const reservasProximaClase = useMemo(() => {
+    if (!siguiente) return [];
+    return (reservas ?? [])
+      .filter(
+        (r) =>
+          r.clase_id === siguiente.clase.id &&
+          r.fecha_reserva === siguiente.fecha &&
+          r.estado === "confirmada"
+      )
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }, [reservas, siguiente]);
 
   const filtradas = useMemo(() => {
     let lista = reservas ?? [];
@@ -116,6 +142,66 @@ export default function ReservasAdmin() {
         <code className="font-mono bg-muted px-2 py-1 rounded text-foreground">{urlPublica}</code>
       </p>
 
+      {/* Reservas de la próxima clase: la que viene, sea en 1 hora o en varios
+          días. A los 10 minutos de empezada, salta sola a la siguiente. */}
+      {siguiente && (
+        <section className="rounded-2xl border-2 border-primary bg-primary/5 p-5 mb-8">
+          <h2 className="text-xl font-bold mb-1">Reservas de la próxima clase</h2>
+          <p className="text-muted-foreground mb-4">
+            {siguiente.clase.nombre} · {siguiente.clase.dia_semana}{" "}
+            {formatFecha(siguiente.fecha)} · {formatHora(siguiente.clase.hora_inicio)} hs
+          </p>
+
+          {reservasProximaClase.length === 0 ? (
+            <p className="text-muted-foreground">Todavía no hay reservas para esta clase.</p>
+          ) : (
+            <Table headers={["Cliente", "Contacto", "Reservado el", "Acciones"]}>
+              {reservasProximaClase.map((r) => (
+                <tr key={r.id} className="hover:bg-muted/40">
+                  <td className="px-5 py-4">
+                    <p className="font-semibold">{r.alumno_nombre}</p>
+                    {fueraDePlan(r) && (
+                      <p className="mt-1">
+                        <Badge tone="danger">Fuera de su plan</Badge>
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-5 py-4">
+                    {r.alumno_telefono ? (
+                      <a
+                        href={whatsappUrl(r.alumno_telefono)}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Abrir chat de WhatsApp"
+                        className="text-success font-semibold hover:underline"
+                      >
+                        {r.alumno_telefono}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-5 py-4 text-muted-foreground">
+                    {formatFechaHora(r.created_at)}
+                  </td>
+                  <td className="px-5 py-4">
+                    <IconButton
+                      title="Cancelar reserva"
+                      onClick={() => setACancelar(r)}
+                      className="text-danger"
+                    >
+                      <XCircle className="w-5 h-5" />
+                    </IconButton>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </section>
+      )}
+
+      <h2 className="text-xl font-bold mb-4">Todas las reservas</h2>
+
       {/* Filtros y ordenamiento */}
       <div className="flex flex-col gap-3 mb-5">
         <ChipsFiltro opciones={FILTROS_ESTADO} valor={estadoFiltro} onChange={setEstadoFiltro} />
@@ -138,7 +224,9 @@ export default function ReservasAdmin() {
       {filtradas.length === 0 ? (
         <EmptyState message="No hay reservas para mostrar con estos filtros." />
       ) : (
-        <Table headers={["Cliente", "Contacto", "Clase", "Fecha", "Estado", "Acciones"]}>
+        <Table
+          headers={["Cliente", "Contacto", "Clase", "Fecha", "Reservado el", "Estado", "Acciones"]}
+        >
           {filtradas.map((r) => (
             <tr key={r.id} className="hover:bg-muted/40">
               <td className="px-5 py-4">
@@ -166,6 +254,7 @@ export default function ReservasAdmin() {
               </td>
               <td className="px-5 py-4">{descClase(r.clase_id)}</td>
               <td className="px-5 py-4 text-muted-foreground">{formatFecha(r.fecha_reserva)}</td>
+              <td className="px-5 py-4 text-muted-foreground">{formatFechaHora(r.created_at)}</td>
               <td className="px-5 py-4">
                 {r.estado === "confirmada" ? (
                   <Badge tone="success">Confirmada</Badge>
