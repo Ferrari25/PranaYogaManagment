@@ -1,7 +1,7 @@
 // Primitivas de UI del estudio: botones grandes, alto contraste y foco visible,
 // pensadas para usuarios adultos mayores.
 
-import { type ReactNode, type ComponentProps } from "react";
+import { useEffect, useState, type ReactNode, type ComponentProps, type ChangeEvent } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import clsx from "clsx";
 
@@ -76,6 +76,49 @@ const inputClass =
 
 export function Input(props: ComponentProps<"input">) {
   return <input {...props} className={clsx(inputClass, props.className)} />;
+}
+
+/**
+ * Campo de monto en pesos: agrega el separador de miles ("25000" -> "25.000")
+ * a medida que se escribe. El valor que maneja el formulario sigue siendo un
+ * número común; el punto es solo visual.
+ */
+export function MoneyInput({
+  value,
+  onChange,
+  className,
+  ...props
+}: {
+  value: number;
+  onChange: (value: number) => void;
+} & Omit<ComponentProps<"input">, "value" | "onChange" | "type">) {
+  const formatear = (n: number) => (n ? n.toLocaleString("es-AR") : "");
+  const [texto, setTexto] = useState(() => formatear(value));
+
+  // Si el monto cambia desde afuera (ej: autocompletar al elegir un plan),
+  // el campo lo refleja.
+  useEffect(() => {
+    setTexto(formatear(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const digitos = e.target.value.replace(/\D/g, "");
+    const numero = digitos ? Number(digitos) : 0;
+    setTexto(formatear(numero));
+    onChange(numero);
+  };
+
+  return (
+    <input
+      {...props}
+      type="text"
+      inputMode="numeric"
+      value={texto}
+      onChange={handleChange}
+      className={clsx(inputClass, className)}
+    />
+  );
 }
 
 export function Textarea(props: ComponentProps<"textarea">) {

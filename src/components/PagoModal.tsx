@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import type { Alumno, MetodoPago, Pago, Plan } from "../lib/types";
 import { MODALIDADES_PAGO } from "../lib/types";
 import { formatPrecio, hoyIso, mesActualIso, nombreCompleto } from "../lib/format";
-import { Button, Field, IconButton, Input, Modal, Select, Textarea } from "./ui";
+import { Button, Field, IconButton, Input, Modal, MoneyInput, Select, Textarea } from "./ui";
 import clsx from "clsx";
 
 type PagoForm = Omit<Pago, "id">;
@@ -147,14 +147,7 @@ export function PagoModal({
         </Field>
 
         <Field label="Monto Total ($)">
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            required
-            value={form.monto || ""}
-            onChange={(e) => setTotal(Number(e.target.value))}
-          />
+          <MoneyInput required value={form.monto} onChange={setTotal} />
         </Field>
 
         {/* Métodos de pago: uno solo o dividido en varios */}
@@ -178,13 +171,10 @@ export function PagoModal({
                 </Select>
                 {metodos.length > 1 && (
                   <>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
+                    <MoneyInput
                       required
-                      value={m.monto || ""}
-                      onChange={(e) => cambiarMetodo(idx, { monto: Number(e.target.value) })}
+                      value={m.monto}
+                      onChange={(monto) => cambiarMetodo(idx, { monto })}
                       className="w-36"
                       aria-label={`Monto parcial en ${m.metodo}`}
                     />

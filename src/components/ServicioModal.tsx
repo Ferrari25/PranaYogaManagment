@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { ServicioTerapia } from "../lib/types";
-import { Button, Field, Input, Modal } from "./ui";
+import { Button, Field, Input, Modal, MoneyInput } from "./ui";
 
 type ServicioForm = Omit<ServicioTerapia, "id" | "activo">;
 
@@ -51,13 +51,10 @@ export function ServicioModal({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Precio ($)">
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
+            <MoneyInput
               required
-              value={form.precio || ""}
-              onChange={(e) => setForm({ ...form, precio: Number(e.target.value) })}
+              value={form.precio}
+              onChange={(precio) => setForm({ ...form, precio })}
             />
           </Field>
           <Field label="Duración (minutos)">

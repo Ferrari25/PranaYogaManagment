@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { ServicioTerapia, TurnoTerapia } from "../lib/types";
 import { MODALIDADES_PAGO } from "../lib/types";
 import { formatHora, HORARIOS_24HS, hoyIso } from "../lib/format";
-import { Button, Field, Input, Modal, Select, Textarea } from "./ui";
+import { Button, Field, Input, Modal, MoneyInput, Select, Textarea } from "./ui";
 
 type TurnoForm = Omit<TurnoTerapia, "id">;
 
@@ -117,13 +117,10 @@ export function TurnoModal({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Monto ($)">
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
+            <MoneyInput
               required
-              value={form.monto || ""}
-              onChange={(e) => setForm({ ...form, monto: Number(e.target.value) })}
+              value={form.monto}
+              onChange={(monto) => setForm({ ...form, monto })}
             />
           </Field>
           <Field label="Modalidad de Pago">

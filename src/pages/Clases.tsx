@@ -214,7 +214,7 @@ export default function Clases() {
                 ) : (
                   <ul className="space-y-3">
                     {delDia.map((c) => (
-                      <li key={c.id} className="rounded-xl bg-muted/60 px-4 py-3">
+                      <li key={c.id} className="rounded-xl border border-border bg-muted px-4 py-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="font-semibold">{c.nombre}</p>

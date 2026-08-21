@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Plan } from "../lib/types";
-import { Button, Field, Input, Modal, Textarea } from "./ui";
+import { Button, Field, Input, Modal, MoneyInput, Textarea } from "./ui";
 
 type PlanForm = Omit<Plan, "id" | "activo">;
 
@@ -71,13 +71,10 @@ export function PlanModal({
             />
           </Field>
           <Field label="Precio Mensual ($)">
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
+            <MoneyInput
               required
-              value={form.precio || ""}
-              onChange={(e) => setForm({ ...form, precio: Number(e.target.value) })}
+              value={form.precio}
+              onChange={(precio) => setForm({ ...form, precio })}
             />
           </Field>
         </div>
